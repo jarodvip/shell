@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+
+# oh my zsh
+sh -c "$(curl -fsSL https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
+chsh -s /bin/zsh
+
+# brew
+/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+
+# brew install
+brew install git
+brew install wget
+brew install ack
+brew install autojump
+brew install tree
+
+echo '[ -f /usr/local/etc/profile.d/autojump.sh ] && . /usr/local/etc/profile.d/autojump.sh' >> ~/.zshrc
+source ~/.zshrc
+
+# vim
+curl -L https://bit.ly/janus-bootstrap | bash
+
+# node install
+
+brew install node
+
+# yarn install
+brew install yarn
+
+
+# prepare folders
+mkdir -p ~/workspace/
+mkdir -p ~/0.temp/
+mkdir -p ~/1.work/
+mkdir -p ~/2.github/
+
+
+# git alias
+git config --global alias.co checkout
+git config --global alias.br branch
+git config --global alias.ci commit
+git config --global alias.st status
+
+# create ssh-keygen
+# ssh-keygen
+# cat ~/.ssh/id_rsa.pub
+cat ~/.ssh/id_ed25519.pub
+echo 'save it to git or icode'
