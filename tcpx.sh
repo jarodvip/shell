@@ -1,10 +1,11 @@
+
 #!/usr/bin/env bash
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export PATH
 #=================================================
 #	System Required: CentOS 7/8,Debian/ubuntu,oraclelinux
 #	Description: BBR+BBRplus+Lotserver
-#	Version: 100.0.1.5
+#	Version: 100.0.2.10
 #	Author: 千影,cx9208,YLX
 #	更新内容及反馈:  https://blog.ylx.me/archives/783.html
 #=================================================
@@ -15,11 +16,12 @@ export PATH
 # SKYBLUE='\033[0;36m'
 # PLAIN='\033[0m'
 
-sh_ver="100.0.1.5"
+sh_ver="100.0.2.10"
 github="raw.githubusercontent.com/ylx2016/Linux-NetSpeed/master"
 
 imgurl=""
 headurl=""
+github_network=1
 
 Green_font_prefix="\033[32m"
 Red_font_prefix="\033[31m"
@@ -32,11 +34,366 @@ if [ -f "/etc/sysctl.d/bbr.conf" ]; then
   rm -rf /etc/sysctl.d/bbr.conf
 fi
 
+# 检查当前用户是否为 root 用户
+if [ "$EUID" -ne 0 ]; then
+  echo "请使用 root 用户身份运行此脚本"
+  exit
+fi
+
+#优化系统配置
+optimizing_system() {
+  if [ ! -f "/etc/sysctl.conf" ]; then
+    touch /etc/sysctl.conf
+  fi
+  sed -i '/net.ipv4.tcp_retries2/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.tcp_slow_start_after_idle/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.tcp_fastopen/d' /etc/sysctl.conf
+  sed -i '/fs.file-max/d' /etc/sysctl.conf
+  sed -i '/fs.inotify.max_user_instances/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.tcp_syncookies/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.tcp_fin_timeout/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.tcp_tw_reuse/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.tcp_max_syn_backlog/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.ip_local_port_range/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.tcp_max_tw_buckets/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.route.gc_timeout/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.tcp_synack_retries/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.tcp_syn_retries/d' /etc/sysctl.conf
+  sed -i '/net.core.somaxconn/d' /etc/sysctl.conf
+  sed -i '/net.core.netdev_max_backlog/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.tcp_timestamps/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.tcp_max_orphans/d' /etc/sysctl.conf
+  sed -i '/net.ipv4.ip_forward/d' /etc/sysctl.conf
+
+  echo "net.ipv4.tcp_retries2 = 8
+net.ipv4.tcp_slow_start_after_idle = 0
+fs.file-max = 1000000
+fs.inotify.max_user_instances = 8192
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_fin_timeout = 30
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.ip_local_port_range = 1024 65000
+net.ipv4.tcp_max_syn_backlog = 16384
+net.ipv4.tcp_max_tw_buckets = 6000
+net.ipv4.route.gc_timeout = 100
+net.ipv4.tcp_syn_retries = 1
+net.ipv4.tcp_synack_retries = 1
+net.core.somaxconn = 32768
+net.core.netdev_max_backlog = 32768
+net.ipv4.tcp_timestamps = 0
+net.ipv4.tcp_max_orphans = 32768
+# forward ipv4
+#net.ipv4.ip_forward = 1" >>/etc/sysctl.conf
+  sysctl -p
+  echo "*               soft    nofile           1000000
+*               hard    nofile          1000000" >/etc/security/limits.conf
+  echo "ulimit -SHn 1000000" >>/etc/profile
+  read -p "需要重启VPS后，才能生效系统优化配置，是否现在重启 ? [Y/n] :" yn
+  [ -z "${yn}" ] && yn="y"
+  if [[ $yn == [Yy] ]]; then
+    echo -e "${Info} VPS 重启中..."
+    reboot
+  fi
+}
+
+optimizing_system_johnrosen1() {
+  if [ ! -f "/etc/sysctl.d/99-sysctl.conf" ]; then
+    touch /etc/sysctl.d/99-sysctl.conf
+  fi
+  sed -i '/net.ipv4.tcp_fack/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_early_retrans/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.neigh.default.unres_qlen/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_max_orphans/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.netfilter.nf_conntrack_buckets/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/kernel.pid_max/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/vm.nr_hugepages/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.core.optmem_max/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.all.route_localnet/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.ip_forward/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.all.forwarding/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.default.forwarding/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv6.conf.all.forwarding/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv6.conf.default.forwarding/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv6.conf.lo.forwarding/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv6.conf.all.disable_ipv6/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv6.conf.default.disable_ipv6/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv6.conf.lo.disable_ipv6/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv6.conf.all.accept_ra/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv6.conf.default.accept_ra/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.core.netdev_max_backlog/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.core.netdev_budget/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.core.netdev_budget_usecs/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/fs.file-max /d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.core.rmem_max/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.core.wmem_max/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.core.rmem_default/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.core.wmem_default/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.core.somaxconn/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.icmp_echo_ignore_all/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.icmp_echo_ignore_broadcasts/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.icmp_ignore_bogus_error_responses/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.all.accept_redirects/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.default.accept_redirects/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.all.secure_redirects/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.default.secure_redirects/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.all.send_redirects/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.default.send_redirects/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.default.rp_filter/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.all.rp_filter/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_keepalive_time/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_keepalive_intvl/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_keepalive_probes/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_synack_retries/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_syncookies/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_rfc1337/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_timestamps/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_tw_reuse/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_fin_timeout/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.ip_local_port_range/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_max_tw_buckets/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_fastopen/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_rmem/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_wmem/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.udp_rmem_min/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.udp_wmem_min/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_mtu_probing/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.all.arp_ignore /d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.default.arp_ignore/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.all.arp_announce/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.default.arp_announce/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_autocorking/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_slow_start_after_idle/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_max_syn_backlog/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.core.default_qdisc/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_notsent_lowat/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_no_metrics_save/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_ecn/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_ecn_fallback/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_frto/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv6.conf.all.accept_redirects/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv6.conf.default.accept_redirects/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/vm.swappiness/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.ip_unprivileged_port_start/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/vm.overcommit_memory/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.neigh.default.gc_thresh3/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.neigh.default.gc_thresh2/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.neigh.default.gc_thresh1/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv6.neigh.default.gc_thresh3/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv6.neigh.default.gc_thresh2/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv6.neigh.default.gc_thresh1/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.netfilter.nf_conntrack_max/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.nf_conntrack_max/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.netfilter.nf_conntrack_tcp_timeout_fin_wait/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.netfilter.nf_conntrack_tcp_timeout_time_wait/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.netfilter.nf_conntrack_tcp_timeout_close_wait/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.netfilter.nf_conntrack_tcp_timeout_established/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/fs.inotify.max_user_instances/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/fs.inotify.max_user_watches/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_low_latency/d' /etc/sysctl.d/99-sysctl.conf
+
+  cat >'/etc/sysctl.d/99-sysctl.conf' <<EOF
+net.ipv4.tcp_fack = 1
+net.ipv4.tcp_early_retrans = 3
+net.ipv4.neigh.default.unres_qlen=10000  
+net.ipv4.conf.all.route_localnet=1
+net.ipv4.ip_forward = 1
+net.ipv4.conf.all.forwarding = 1
+net.ipv4.conf.default.forwarding = 1
+#net.ipv6.conf.all.forwarding = 1  #awsipv6问题
+net.ipv6.conf.default.forwarding = 1
+net.ipv6.conf.lo.forwarding = 1
+net.ipv6.conf.all.disable_ipv6 = 0
+net.ipv6.conf.default.disable_ipv6 = 0
+net.ipv6.conf.lo.disable_ipv6 = 0
+net.ipv6.conf.all.accept_ra = 2
+net.ipv6.conf.default.accept_ra = 2
+net.core.netdev_max_backlog = 100000
+net.core.netdev_budget = 50000
+net.core.netdev_budget_usecs = 5000
+#fs.file-max = 51200
+net.core.rmem_max = 67108864
+net.core.wmem_max = 67108864
+net.core.rmem_default = 67108864
+net.core.wmem_default = 67108864
+net.core.optmem_max = 65536
+net.core.somaxconn = 1000000
+net.ipv4.icmp_echo_ignore_all = 0
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.conf.all.secure_redirects = 0
+net.ipv4.conf.default.secure_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.conf.default.rp_filter = 0
+net.ipv4.conf.all.rp_filter = 0
+net.ipv4.tcp_keepalive_time = 600
+net.ipv4.tcp_keepalive_intvl = 15
+net.ipv4.tcp_keepalive_probes = 2
+net.ipv4.tcp_synack_retries = 1
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_rfc1337 = 0
+net.ipv4.tcp_timestamps = 1
+net.ipv4.tcp_tw_reuse = 0
+net.ipv4.tcp_fin_timeout = 15
+net.ipv4.ip_local_port_range = 1024 65535
+net.ipv4.tcp_max_tw_buckets = 5000
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_rmem = 4096 87380 67108864
+net.ipv4.tcp_wmem = 4096 65536 67108864
+net.ipv4.udp_rmem_min = 8192
+net.ipv4.udp_wmem_min = 8192
+net.ipv4.tcp_mtu_probing = 1
+net.ipv4.tcp_autocorking = 0
+net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_max_syn_backlog = 819200
+net.ipv4.tcp_notsent_lowat = 16384
+net.ipv4.tcp_no_metrics_save = 0
+net.ipv4.tcp_ecn = 1
+net.ipv4.tcp_ecn_fallback = 1
+net.ipv4.tcp_frto = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv6.conf.default.accept_redirects = 0
+net.ipv4.neigh.default.gc_thresh3=8192
+net.ipv4.neigh.default.gc_thresh2=4096
+net.ipv4.neigh.default.gc_thresh1=2048
+net.ipv6.neigh.default.gc_thresh3=8192
+net.ipv6.neigh.default.gc_thresh2=4096
+net.ipv6.neigh.default.gc_thresh1=2048
+net.ipv4.tcp_orphan_retries = 1
+net.ipv4.tcp_retries2 = 5
+vm.swappiness = 1
+vm.overcommit_memory = 1
+kernel.pid_max=64000
+net.netfilter.nf_conntrack_max = 262144
+net.nf_conntrack_max = 262144
+## Enable bbr
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+net.ipv4.tcp_low_latency = 1
+EOF
+  sysctl -p
+  sysctl --system
+  echo always >/sys/kernel/mm/transparent_hugepage/enabled
+
+  cat >'/etc/systemd/system.conf' <<EOF
+[Manager]
+#DefaultTimeoutStartSec=90s
+DefaultTimeoutStopSec=30s
+#DefaultRestartSec=100ms
+DefaultLimitCORE=infinity
+DefaultLimitNOFILE=infinity
+DefaultLimitNPROC=infinity
+DefaultTasksMax=infinity
+EOF
+
+  cat >'/etc/security/limits.conf' <<EOF
+root     soft   nofile    1000000
+root     hard   nofile    1000000
+root     soft   nproc     unlimited
+root     hard   nproc     unlimited
+root     soft   core      unlimited
+root     hard   core      unlimited
+root     hard   memlock   unlimited
+root     soft   memlock   unlimited
+*     soft   nofile    1000000
+*     hard   nofile    1000000
+*     soft   nproc     unlimited
+*     hard   nproc     unlimited
+*     soft   core      unlimited
+*     hard   core      unlimited
+*     hard   memlock   unlimited
+*     soft   memlock   unlimited
+EOF
+
+  sed -i '/ulimit -SHn/d' /etc/profile
+  sed -i '/ulimit -SHu/d' /etc/profile
+  echo "ulimit -SHn 1000000" >>/etc/profile
+
+  if grep -q "pam_limits.so" /etc/pam.d/common-session; then
+    :
+  else
+    sed -i '/required pam_limits.so/d' /etc/pam.d/common-session
+    echo "session required pam_limits.so" >>/etc/pam.d/common-session
+  fi
+  systemctl daemon-reload
+  echo -e "${Info}优化方案2应用结束，可能需要重启！"
+}
+
+#处理传进来的参数 直接优化
+err() {
+    echo "错误: $1"
+    exit 1
+}
+
+while [ $# -gt 0 ]; do
+    case $1 in
+        op)
+            optimizing_system  # 调用函数
+			exit
+            ;;
+        op2)
+            optimizing_system_johnrosen1  # 调用函数
+			exit
+            ;;
+        *)
+            err "未知选项: \"$1\""
+            ;;
+    esac
+    shift  # 移动到下一个参数
+done
+
+# 检查github网络
+check_github() {
+  # 检测域名的可访问性函数
+  check_domain() {
+    local domain="$1"
+    if ! curl --max-time 5 --head --silent --fail "$domain" >/dev/null; then
+      echo -e "${Error}无法访问 $domain，请检查网络或者本地DNS 或者访问频率过快而受限"
+      github_network=0
+    fi
+  }
+
+  # 检测所有域名的可访问性
+  check_domain "https://raw.githubusercontent.com"
+  check_domain "https://api.github.com"
+  check_domain "https://github.com"
+
+  if [ "$github_network" -eq 0 ]; then
+    echo -e "${Error}github网络访问受限，将影响内核的安装以及脚本的检查更新，1秒后继续运行脚本"
+    sleep 1
+  else
+    # 所有域名均可访问，打印成功提示
+    echo "${Green_font_prefix}github可访问${Font_color_suffix}，继续执行脚本..."
+  fi
+}
+
 #检查连接
 checkurl() {
-  url=$(curl --max-time 5 --retry 3 --retry-delay 2 --connect-timeout 2 -s --head $1 | head -n 1)
-  # echo ${url}
-  if [[ ${url} == *200* || ${url} == *302* || ${url} == *308* ]]; then
+  local url="$1"
+  local maxRetries=3
+  local retryDelay=2
+
+  if [[ -z "$url" ]]; then
+    echo "错误：缺少URL参数！"
+    exit 1
+  fi
+
+  local retries=0
+  local responseCode=""
+
+  while [[ -z "$responseCode" && $retries -lt $maxRetries ]]; do
+    responseCode=$(curl --max-time 6 -s -L -m 10 --connect-timeout 5 -o /dev/null -w "%{http_code}" "$url")
+
+    if [[ -z "$responseCode" ]]; then
+      ((retries++))
+      sleep $retryDelay
+    fi
+  done
+
+  if [[ -n "$responseCode" && ("$responseCode" == "200" || "$responseCode" =~ ^3[0-9]{2}$) ]]; then
     echo "下载地址检查OK，继续！"
   else
     echo "下载地址检查出错，退出！"
@@ -44,16 +401,128 @@ checkurl() {
   fi
 }
 
-#cn使用fastgit.org的github加速
+#cn处理github加速
 check_cn() {
-  geoip=$(wget --user-agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36" --no-check-certificate -qO- https://api.ip.sb/geoip -T 10 | grep "\"country_code\":\"CN\"")
-  if [[ "$geoip" != "" ]]; then
-    # echo "下面使用fastgit.org的加速服务"
-    # echo ${1//github.com/download.fastgit.org}
-	echo https://endpoint.fastgit.org/$1
-  else
-    echo $1
+  # 检查是否安装了jq命令，如果没有安装则进行安装
+  if ! command -v jq >/dev/null 2>&1; then
+    if command -v yum >/dev/null 2>&1; then
+      sudo yum install epel-release -y
+      sudo yum install -y jq
+    elif command -v apt-get >/dev/null 2>&1; then
+      sudo apt-get update
+      sudo apt-get install -y jq
+    else
+      echo "无法安装jq命令。请手动安装jq后再试。"
+      exit 1
+    fi
   fi
+
+  # 获取当前IP地址，设置超时为3秒
+  current_ip=$(curl -s --max-time 3 https://api.ipify.org)
+
+  # 使用ip-api.com查询IP所在国家，设置超时为3秒
+  response=$(curl -s --max-time 3 "http://ip-api.com/json/$current_ip")
+
+  # 检查国家是否为中国
+  country=$(echo "$response" | jq -r '.countryCode')
+  if [[ "$country" == "CN" ]]; then
+    local suffixes=(
+      "https://gh.con.sh/"
+      "https://gh-proxy.com/"
+      "https://ghp.ci/"
+      "https://gh.m-l.cc/"
+      "https://down.npee.cn/?"
+      "https://mirror.ghproxy.com/"
+      "https://ghps.cc/"
+      "https://gh.api.99988866.xyz/"
+      "https://git.886.be/"
+      "https://hub.gitmirror.com/"
+	  "https://pd.zwc365.com/"
+      "https://gh.ddlc.top/"
+      "https://slink.ltd/"
+      "https://github.moeyy.xyz/"
+      "https://ghproxy.crazypeace.workers.dev/"
+	  "https://gh.h233.eu.org/"
+    )
+
+    # 循环遍历每个后缀并测试组合的链接
+    for suffix in "${suffixes[@]}"; do
+      # 组合后缀和原始链接
+      combined_url="$suffix$1"
+
+      # 使用 curl -I 获取头部信息，提取状态码
+      local response_code=$(curl --max-time 2 -sL -w "%{http_code}" -I "$combined_url" | head -n 1 | awk '{print $2}')
+
+      # 检查响应码是否表示成功 (2xx)
+      if [[ $response_code -ge 200 && $response_code -lt 300 ]]; then
+        echo "$combined_url"
+        return 0 # 返回可用链接，结束函数
+      fi
+    done
+
+  # 如果没有找到有效链接，返回原始链接
+  else
+    echo "$1"
+    return 1
+
+  fi
+}
+
+#下载
+download_file() {
+  url="$1"
+  filename="$2"
+
+  wget "$url" -O "$filename"
+  status=$?
+
+  if [ $status -eq 0 ]; then
+    echo -e "\e[32m文件下载成功或已经是最新。\e[0m"
+  else
+    echo -e "\e[31m文件下载失败，退出状态码: $status\e[0m"
+    exit 1
+  fi
+}
+
+#檢查賦值
+check_empty() {
+  local var_value=$1
+
+  if [[ -z $var_value ]]; then
+    echo "$var_value 是空值，退出！"
+    exit 1
+  fi
+}
+
+#检查磁盘空间
+check_disk_space() {
+    # 检查是否存在 bc 命令
+    if ! command -v bc &> /dev/null; then
+        echo "安装 bc 命令..."
+        # 检查系统类型并安装相应的 bc 包
+        if [ -f /etc/redhat-release ]; then
+            yum install -y bc
+        elif [ -f /etc/debian_version ]; then
+            apt-get update
+            apt-get install -y bc
+        else
+            echo "无法确定系统类型，请手动安装 bc 命令。"
+            return 1
+        fi
+    fi
+
+    # 获取当前磁盘剩余空间
+    available_space=$(df -h / | awk 'NR==2 {print $4}')
+
+    # 移除单位字符，例如"GB"，并将剩余空间转换为数字
+    available_space=$(echo $available_space | sed 's/G//')
+
+    # 如果剩余空间小于等于0，则输出警告信息
+    if [ $(echo "$available_space <= 0" | bc) -eq 1 ]; then
+        echo "警告：磁盘空间已用尽，请勿重启，先清理空间。建议先卸载刚才安装的内核来释放空间，仅供参考。"
+    else
+        echo "当前磁盘剩余空间：$available_space GB"
+    fi
 }
 
 #安装BBR内核
@@ -63,29 +532,31 @@ installbbr() {
   rm -rf bbr
   mkdir bbr && cd bbr || exit
 
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     if [[ ${version} == "7" ]]; then
       if [[ ${bit} == "x86_64" ]]; then
         echo -e "如果下载地址出错，可能当前正在更新，超过半天还是出错请反馈，大陆自行解决污染问题"
         #github_ver=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}' | awk -F '[_]' '{print $3}')
-        github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Centos_Kernel' | grep '_latest_bbr_' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
-        github_ver=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}')
-        echo -e "获取的版本号为:${github_ver}"
-        kernel_version=$github_ver
-        detele_kernel_head
-        headurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}')
-        imgurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep -v 'headers' | grep -v 'devel' | awk -F '"' '{print $4}')
+        #github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Centos_Kernel' | grep '_latest_bbr_' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
+        #github_ver=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}')
+        #check_empty $github_ver
+        #echo -e "获取的版本号为:${Green_font_prefix}${github_ver}${Font_color_suffix}"
+        #kernel_version=$github_ver
+        #detele_kernel_head
+        #headurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}')
+        #imgurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep -v 'headers' | grep -v 'devel' | awk -F '"' '{print $4}')
         #headurl=https://github.com/ylx2016/kernel/releases/download/$github_tag/kernel-headers-${github_ver}-1.x86_64.rpm
         #imgurl=https://github.com/ylx2016/kernel/releases/download/$github_tag/kernel-${github_ver}-1.x86_64.rpm
+		
+		headurl=https://github.com/ylx2016/kernel/releases/download/Centos_Kernel_6.1.35_latest_bbr_2023.06.22-0855/kernel-headers-6.1.35-1.x86_64.rpm	
+		imgurl=https://github.com/ylx2016/kernel/releases/download/Centos_Kernel_6.1.35_latest_bbr_2023.06.22-0855/kernel-6.1.35-1.x86_64.rpm
 
+        check_empty $imgurl
         headurl=$(check_cn $headurl)
         imgurl=$(check_cn $imgurl)
-        echo -e "正在检查headers下载连接...."
-        checkurl $headurl
-        echo -e "正在检查内核下载连接...."
-        checkurl $imgurl
-        wget -N -O kernel-headers-c7.rpm $headurl
-        wget -N -O kernel-c7.rpm $imgurl
+
+        download_file $headurl kernel-headers-c7.rpm
+        download_file $imgurl kernel-c7.rpm
         yum install -y kernel-c7.rpm
         yum install -y kernel-headers-c7.rpm
       else
@@ -93,12 +564,13 @@ installbbr() {
       fi
     fi
 
-  elif [[ "${release}" == "ubuntu" || "${release}" == "debian" ]]; then
+  elif [[ "${OS_type}" == "Debian" ]]; then
     if [[ ${bit} == "x86_64" ]]; then
       echo -e "如果下载地址出错，可能当前正在更新，超过半天还是出错请反馈，大陆自行解决污染问题"
-      github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Ubuntu_Kernel' | grep '_latest_bbr_' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
+      github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Debian_Kernel' | grep '_latest_bbr_' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
       github_ver=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'deb' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}' | awk -F '[_]' '{print $1}')
-      echo -e "获取的版本号为:${github_ver}"
+      check_empty $github_ver
+      echo -e "获取的版本号为:${Green_font_prefix}${github_ver}${Font_color_suffix}"
       kernel_version=$github_ver
       detele_kernel_head
       headurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'deb' | grep 'headers' | awk -F '"' '{print $4}')
@@ -108,34 +580,29 @@ installbbr() {
 
       headurl=$(check_cn $headurl)
       imgurl=$(check_cn $imgurl)
-      echo -e "正在检查headers下载连接...."
-      checkurl $headurl
-      echo -e "正在检查内核下载连接...."
-      checkurl $imgurl
-      wget -N -O linux-headers-d10.deb $headurl
-      wget -N -O linux-image-d10.deb $imgurl
+
+      download_file $headurl linux-headers-d10.deb
+      download_file $imgurl linux-image-d10.deb
       dpkg -i linux-image-d10.deb
       dpkg -i linux-headers-d10.deb
     elif [[ ${bit} == "aarch64" ]]; then
       echo -e "如果下载地址出错，可能当前正在更新，超过半天还是出错请反馈，大陆自行解决污染问题"
-      github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Ubuntu_Kernel' | grep '_arm64_' | grep '_bbr_' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
+      github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Debian_Kernel' | grep '_arm64_' | grep '_bbr_' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
       github_ver=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'deb' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}' | awk -F '[_]' '{print $1}')
-      echo -e "获取的版本号为:${github_ver}"
+      echo -e "获取的版本号为:${Green_font_prefix}${github_ver}${Font_color_suffix}"
       kernel_version=$github_ver
       detele_kernel_head
       headurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'deb' | grep 'headers' | awk -F '"' '{print $4}')
       imgurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'deb' | grep -v 'headers' | grep -v 'devel' | awk -F '"' '{print $4}')
       #headurl=https://github.com/ylx2016/kernel/releases/download/$github_tag/linux-headers-${github_ver}_${github_ver}-1_amd64.deb
       #imgurl=https://github.com/ylx2016/kernel/releases/download/$github_tag/linux-image-${github_ver}_${github_ver}-1_amd64.deb
-      
+
+      check_empty $imgurl
       headurl=$(check_cn $headurl)
       imgurl=$(check_cn $imgurl)
-	  echo -e "正在检查headers下载连接...."
-      checkurl $headurl
-      echo -e "正在检查内核下载连接...."
-      checkurl $imgurl
-      wget -N -O linux-headers-d10.deb $headurl
-      wget -N -O linux-image-d10.deb $imgurl
+
+      download_file $headurl linux-headers-d10.deb
+      download_file $imgurl linux-image-d10.deb
       dpkg -i linux-image-d10.deb
       dpkg -i linux-headers-d10.deb
     else
@@ -156,7 +623,7 @@ installbbrplus() {
   bit=$(uname -m)
   rm -rf bbrplus
   mkdir bbrplus && cd bbrplus || exit
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     if [[ ${version} == "7" ]]; then
       if [[ ${bit} == "x86_64" ]]; then
         kernel_version="4.14.129_bbrplus"
@@ -166,12 +633,9 @@ installbbrplus() {
 
         headurl=$(check_cn $headurl)
         imgurl=$(check_cn $imgurl)
-        echo -e "正在检查headers下载连接...."
-        checkurl $headurl
-        echo -e "正在检查内核下载连接...."
-        checkurl $imgurl
-        wget -N -O kernel-headers-c7.rpm $headurl
-        wget -N -O kernel-c7.rpm $imgurl
+
+        download_file $headurl kernel-headers-c7.rpm
+        download_file $imgurl kernel-c7.rpm
         yum install -y kernel-c7.rpm
         yum install -y kernel-headers-c7.rpm
       else
@@ -179,7 +643,7 @@ installbbrplus() {
       fi
     fi
 
-  elif [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
+  elif [[ "${OS_type}" == "Debian" ]]; then
     if [[ ${bit} == "x86_64" ]]; then
       kernel_version="4.14.129-bbrplus"
       detele_kernel_head
@@ -188,12 +652,9 @@ installbbrplus() {
 
       headurl=$(check_cn $headurl)
       imgurl=$(check_cn $imgurl)
-      echo -e "正在检查headers下载连接...."
-      checkurl $headurl
-      echo -e "正在检查内核下载连接...."
-      checkurl $imgurl
-      wget -N -O linux-headers.deb $headurl
-      wget -N -O linux-image.deb $imgurl
+
+      wget -O linux-headers.deb $headurl
+      wget -O linux-image.deb $imgurl
 
       dpkg -i linux-image.deb
       dpkg -i linux-headers.deb
@@ -220,7 +681,7 @@ installlot() {
   if [[ ${bit} == "i386" ]]; then
     bit='x32'
   fi
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     rpm --import http://${github}/lotserver/${release}/RPM-GPG-KEY-elrepo.org
     yum remove -y kernel-firmware
     yum install -y http://${github}/lotserver/${release}/${version}/${bit}/kernel-firmware-${kernel_version}.rpm
@@ -230,7 +691,7 @@ installlot() {
     yum install -y http://${github}/lotserver/${release}/${version}/${bit}/kernel-devel-${kernel_version}.rpm
   fi
 
-  if [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
+  if [[ "${OS_type}" == "Debian" ]]; then
     deb_issue="$(cat /etc/issue)"
     deb_relese="$(echo $deb_issue | grep -io 'Ubuntu\|Debian' | sed -r 's/(.*)/\L\1/')"
     os_ver="$(dpkg --print-architecture)"
@@ -253,9 +714,9 @@ installlot() {
       if [ "$deb_ver" == "7" ]; then
         kernel_version="3.2.0-4-${os_ver}" && item="3.2.0-4-${os_ver}" && ver='wheezy' && url='archive.debian.org' && urls='archive.debian.org'
       elif [ "$deb_ver" == "8" ]; then
-        kernel_version="3.16.0-4-${os_ver}" && item="3.16.0-4-${os_ver}" && ver='jessie' && url='archive.debian.org' && urls='deb.debian.org'
+        kernel_version="3.16.0-4-${os_ver}" && item="3.16.0-4-${os_ver}" && ver='jessie' && url='archive.debian.org' && urls='archive.debian.org'
       elif [ "$deb_ver" == "9" ]; then
-        kernel_version="4.9.0-4-${os_ver}" && item="4.9.0-4-${os_ver}" && ver='stretch' && url='deb.debian.org' && urls='deb.debian.org'
+        kernel_version="4.9.0-4-${os_ver}" && item="4.9.0-4-${os_ver}" && ver='stretch' && url='archive.debian.org' && urls='archive.debian.org'
       else
         exit 1
       fi
@@ -320,6 +781,9 @@ installlot() {
 
 #安装xanmod内核  from xanmod.org
 installxanmod() {
+  echo -e "xanmod这个自编译版本不维护了，后续请用官方编译版本，知悉."
+  #https://api.github.com/repos/ylx2016/kernel/releases?page=1&per_page=100
+  #releases?page=1&per_page=100
   kernel_version="5.5.1-xanmod1"
   bit=$(uname -m)
   if [[ ${bit} != "x86_64" ]]; then
@@ -327,26 +791,27 @@ installxanmod() {
   fi
   rm -rf xanmod
   mkdir xanmod && cd xanmod || exit
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     if [[ ${version} == "7" ]]; then
       if [[ ${bit} == "x86_64" ]]; then
         echo -e "如果下载地址出错，可能当前正在更新，超过半天还是出错请反馈，大陆自行解决污染问题"
-        github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Centos_Kernel' | grep '_lts_latest_' | grep 'xanmod' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
-        github_ver=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}')
-        echo -e "获取的版本号为:${github_ver}"
-        kernel_version=$github_ver
-        detele_kernel_head
-        headurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}')
-        imgurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep -v 'headers' | grep -v 'devel' | awk -F '"' '{print $4}')
+        #github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Centos_Kernel' | grep '_lts_latest_' | grep 'xanmod' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
+        #github_ver=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}')
+        #echo -e "获取的版本号为:${Green_font_prefix}${github_ver}${Font_color_suffix}"
+        #kernel_version=$github_ver
+        #detele_kernel_head
+        #headurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}')
+        #imgurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep -v 'headers' | grep -v 'devel' | awk -F '"' '{print $4}')
 
+        headurl=https://github.com/ylx2016/kernel/releases/download/Centos_Kernel_5.15.95-xanmod1_lts_latest_2023.02.24-2159/kernel-headers-5.15.95_xanmod1-1.x86_64.rpm
+		imgurl=https://github.com/ylx2016/kernel/releases/download/Centos_Kernel_5.15.95-xanmod1_lts_latest_2023.02.24-2159/kernel-5.15.95_xanmod1-1.x86_64.rpm
+
+		check_empty $imgurl
         headurl=$(check_cn $headurl)
         imgurl=$(check_cn $imgurl)
-        echo -e "正在检查headers下载连接...."
-        checkurl $headurl
-        echo -e "正在检查内核下载连接...."
-        checkurl $imgurl
-        wget -N -O kernel-headers-c7.rpm $headurl
-        wget -N -O kernel-c7.rpm $imgurl
+
+        download_file $headurl kernel-headers-c7.rpm
+        download_file $imgurl kernel-c7.rpm
         yum install -y kernel-c7.rpm
         yum install -y kernel-headers-c7.rpm
       else
@@ -354,68 +819,52 @@ installxanmod() {
       fi
     elif [[ ${version} == "8" ]]; then
       echo -e "如果下载地址出错，可能当前正在更新，超过半天还是出错请反馈，大陆自行解决污染问题"
-      github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Centos_Kernel' | grep '_lts_C8_latest_' | grep 'xanmod' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
-      github_ver=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}')
-      echo -e "获取的版本号为:${github_ver}"
-      kernel_version=$github_ver
-      detele_kernel_head
-      headurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}')
-      imgurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep -v 'headers' | grep -v 'devel' | awk -F '"' '{print $4}')
+      #github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Centos_Kernel' | grep '_lts_C8_latest_' | grep 'xanmod' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
+      #github_ver=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}')
+      #echo -e "获取的版本号为:${Green_font_prefix}${github_ver}${Font_color_suffix}"
+      #kernel_version=$github_ver
+      #detele_kernel_head
+      #headurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}')
+      #imgurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep -v 'headers' | grep -v 'devel' | awk -F '"' '{print $4}')
 
+      headurl=https://github.com/ylx2016/kernel/releases/download/Centos_Kernel_5.15.81-xanmod1_lts_C8_latest_2022.12.06-1614/kernel-headers-5.15.81_xanmod1-1.x86_64.rpm
+      imgurl=https://github.com/ylx2016/kernel/releases/download/Centos_Kernel_5.15.81-xanmod1_lts_C8_latest_2022.12.06-1614/kernel-5.15.81_xanmod1-1.x86_64.rpm
+
+      check_empty $imgurl
       headurl=$(check_cn $headurl)
       imgurl=$(check_cn $imgurl)
-      echo -e "正在检查headers下载连接...."
-      checkurl $headurl
-      echo -e "正在检查内核下载连接...."
-      checkurl $imgurl
-      wget -N -O kernel-headers-c8.rpm $headurl
-      wget -N -O kernel-c8.rpm $imgurl
+
+      wget -O kernel-headers-c8.rpm $headurl
+      wget -O kernel-c8.rpm $imgurl
       yum install -y kernel-c8.rpm
       yum install -y kernel-headers-c8.rpm
     fi
 
-  elif [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
+  elif [[ "${OS_type}" == "Debian" ]]; then
 
     if [[ ${bit} == "x86_64" ]]; then
-      # kernel_version="5.11.4-xanmod"
-      # xanmod_ver_b=$(rm -rf /tmp/url.tmp && curl -o /tmp/url.tmp 'https://dl.xanmod.org/dl/changelog/?C=N;O=D' && grep folder.gif /tmp/url.tmp | head -n 1 | awk -F "[/]" '{print $5}' | awk -F "[>]" '{print $2}')
-      # xanmod_ver_s=$(rm -rf /tmp/url.tmp && curl -o /tmp/url.tmp 'https://dl.xanmod.org/changelog/${xanmod_ver_b}/?C=M;O=D' && grep $xanmod_ver_b /tmp/url.tmp | head -n 3 | awk -F "[-]" '{print $2}')
-      #sourceforge_xanmod_lts_ver=$(curl -s https://sourceforge.net/projects/xanmod/files/releases/lts/ | grep 'class="folder ">' | head -n 1 | awk -F '"' '{print $2}')
-      #sourceforge_xanmod_lts_file_img=$(curl -s https://sourceforge.net/projects/xanmod/files/releases/lts/${sourceforge_xanmod_lts_ver}/ | grep 'linux-image' | head -n 1 | awk -F '"' '{print $2}')
-      #sourceforge_xanmod_lts_file_head=$(curl -s https://sourceforge.net/projects/xanmod/files/releases/lts/${sourceforge_xanmod_lts_ver}/ | grep 'linux-headers' | head -n 1 | awk -F '"' '{print $2}')
-      # sourceforge_xanmod_stable_ver=$(curl -s https://sourceforge.net/projects/xanmod/files/releases/stable/ | grep 'class="folder ">' | head -n 1 | awk -F '"' '{print $2}')
-      # sourceforge_xanmod_stable_file_img=$(curl -s https://sourceforge.net/projects/xanmod/files/releases/stable/${sourceforge_xanmod_stable_ver}/ | grep 'linux-image' | head -n 1 | awk -F '"' '{print $2}')
-      # sourceforge_xanmod_stable_file_head=$(curl -s https://sourceforge.net/projects/xanmod/files/releases/stable/${sourceforge_xanmod_stable_ver}/ | grep 'linux-headers' | head -n 1 | awk -F '"' '{print $2}')
-      # sourceforge_xanmod_cacule_ver=$(curl -s https://sourceforge.net/projects/xanmod/files/releases/cacule/ | grep 'class="folder ">' | head -n 1 | awk -F '"' '{print $2}')
-      # sourceforge_xanmod_cacule_file_img=$(curl -s https://sourceforge.net/projects/xanmod/files/releases/cacule/${sourceforge_xanmod_cacule_ver}/ | grep 'linux-image' | head -n 1 | awk -F '"' '{print $2}')
-      # sourceforge_xanmod_cacule_file_head=$(curl -s https://sourceforge.net/projects/xanmod/files/releases/cacule/${sourceforge_xanmod_cacule_ver}/ | grep 'linux-headers' | head -n 1 | awk -F '"' '{print $2}')
       echo -e "如果下载地址出错，可能当前正在更新，超过半天还是出错请反馈，大陆自行解决污染问题"
-      github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Ubuntu_Kernel' | grep '_lts_latest_' | grep 'xanmod' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
-      github_ver=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'deb' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}')
-      #echo -e "获取的xanmod lts版本号为:${sourceforge_xanmod_lts_ver}"
-      echo -e "获取的xanmod lts版本号为:${github_ver}"
-      # kernel_version=$sourceforge_xanmod_stable_ver
-      kernel_version=$github_ver
-      # detele_kernel_head
-      # headurl=https://sourceforge.net/projects/xanmod/files/releases/stable/${sourceforge_xanmod_stable_ver}/${sourceforge_xanmod_stable_file_head}/download
-      # imgurl=https://sourceforge.net/projects/xanmod/files/releases/stable/${sourceforge_xanmod_stable_ver}/${sourceforge_xanmod_stable_file_img}/download
-      #kernel_version=$sourceforge_xanmod_lts_ver
-      detele_kernel_head
-      #headurl=https://sourceforge.net/projects/xanmod/files/releases/cacule/${sourceforge_xanmod_cacule_ver}/${sourceforge_xanmod_cacule_file_head}/download
-      #imgurl=https://sourceforge.net/projects/xanmod/files/releases/cacule/${sourceforge_xanmod_cacule_ver}/${sourceforge_xanmod_cacule_file_img}/download
-      #headurl=https://sourceforge.net/projects/xanmod/files/releases/lts/${sourceforge_xanmod_lts_ver}/${sourceforge_xanmod_lts_file_head}/download
-      #imgurl=https://sourceforge.net/projects/xanmod/files/releases/lts/${sourceforge_xanmod_lts_ver}/${sourceforge_xanmod_lts_file_img}/download
-      headurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'deb' | grep 'headers' | awk -F '"' '{print $4}')
-      imgurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'deb' | grep -v 'headers' | grep -v 'devel' | awk -F '"' '{print $4}')
+      #github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Debian_Kernel' | grep '_lts_latest_' | grep 'xanmod' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
+      #github_ver=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'deb' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}')
 
+      #check_empty $github_ver
+      #echo -e "获取的xanmod lts版本号为:${github_ver}"
+
+      #kernel_version=$github_ver
+
+      #detele_kernel_head
+      #headurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'deb' | grep 'headers' | awk -F '"' '{print $4}')
+      #imgurl=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'deb' | grep -v 'headers' | grep -v 'devel' | awk -F '"' '{print $4}')
+
+      headurl=https://github.com/ylx2016/kernel/releases/download/Debian_Kernel_5.15.95-xanmod1_lts_latest_2023.02.24-2210/linux-headers-5.15.95-xanmod1_5.15.95-xanmod1-1_amd64.deb
+      imgurl=https://github.com/ylx2016/kernel/releases/download/Debian_Kernel_5.15.95-xanmod1_lts_latest_2023.02.24-2210/linux-image-5.15.95-xanmod1_5.15.95-xanmod1-1_amd64.deb
+
+      check_empty $imgurl
       headurl=$(check_cn $headurl)
       imgurl=$(check_cn $imgurl)
-      echo -e "正在检查headers下载连接...."
-      checkurl $headurl
-      echo -e "正在检查内核下载连接...."
-      checkurl $imgurl
-      wget -N -O linux-headers-d10.deb $headurl
-      wget -N -O linux-image-d10.deb $imgurl
+
+      download_file $headurl linux-headers-d10.deb
+      download_file $imgurl linux-image-d10.deb
       dpkg -i linux-image-d10.deb
       dpkg -i linux-headers-d10.deb
     else
@@ -423,7 +872,7 @@ installxanmod() {
     fi
   fi
 
-  cd .. && rm -rf xanmod
+  #cd .. && rm -rf xanmod
   BBR_grub
   echo -e "${Tip} 内核安装完毕，请参考上面的信息检查是否安装成功,默认从排第一的高版本内核启动"
   check_kernel
@@ -431,17 +880,18 @@ installxanmod() {
 
 #安装bbr2内核 集成到xanmod内核了
 #安装bbrplus 新内核
-#2021.3.15 开始由https://github.com/UJX6N/bbrplus-5.17 替换bbrplusnew
+#2021.3.15 开始由https://github.com/UJX6N/bbrplus-5.19 替换bbrplusnew
 #2021.4.12 地址更新为https://github.com/ylx2016/kernel/releases
-#2021.9.2 再次改为https://github.com/UJX6N/bbrplus-5.17
-#2022.2.26 改为https://github.com/UJX6N/bbrplus-5.17
+#2021.9.2 再次改为https://github.com/UJX6N/bbrplus
+#2022.9.6 改为https://github.com/UJX6N/bbrplus-5.19
+#2022.11.24 改为https://github.com/UJX6N/bbrplus-6.x_stable
 
 installbbrplusnew() {
-  github_ver_plus=$(curl -s https://api.github.com/repos/UJX6N/bbrplus-5.17/releases | grep /bbrplus-5.17/releases/tag/ | head -1 | awk -F "[/]" '{print $8}' | awk -F "[\"]" '{print $1}')
-  github_ver_plus_num=$(curl -s https://api.github.com/repos/UJX6N/bbrplus-5.17/releases | grep /bbrplus-5.17/releases/tag/ | head -1 | awk -F "[/]" '{print $8}' | awk -F "[\"]" '{print $1}' | awk -F "[-]" '{print $1}')
-  echo -e "获取的UJX6N的bbrplus-5.17版本号为:${github_ver_plus}"
+  github_ver_plus=$(curl -s https://api.github.com/repos/UJX6N/bbrplus-6.x_stable/releases | grep /bbrplus-6.x_stable/releases/tag/ | head -1 | awk -F "[/]" '{print $8}' | awk -F "[\"]" '{print $1}')
+  github_ver_plus_num=$(curl -s https://api.github.com/repos/UJX6N/bbrplus-6.x_stable/releases | grep /bbrplus-6.x_stable/releases/tag/ | head -1 | awk -F "[/]" '{print $8}' | awk -F "[\"]" '{print $1}' | awk -F "[-]" '{print $1}')
+  echo -e "获取的UJX6N的bbrplus-6.x_stable版本号为:${Green_font_prefix}${github_ver_plus}${Font_color_suffix}"
   echo -e "如果下载地址出错，可能当前正在更新，超过半天还是出错请反馈，大陆自行解决污染问题"
-  echo -e "安装失败这边反馈，内核问题给UJX6N反馈"
+  echo -e "${Green_font_prefix}安装失败这边反馈，内核问题给UJX6N反馈${Font_color_suffix}"
   # kernel_version=$github_ver_plus
 
   bit=$(uname -m)
@@ -450,25 +900,22 @@ installbbrplusnew() {
   #fi
   rm -rf bbrplusnew
   mkdir bbrplusnew && cd bbrplusnew || exit
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     if [[ ${version} == "7" ]]; then
       if [[ ${bit} == "x86_64" ]]; then
         #github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Centos_Kernel' | grep '_latest_bbrplus_' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
         #github_ver=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}' | awk -F '[_]' '{print $1}')
-        #echo -e "获取的版本号为:${github_ver}"
-        kernel_version=${github_ver_plus_num}
+        #echo -e "获取的版本号为:${Green_font_prefix}${github_ver}${Font_color_suffix}"
+        kernel_version=${github_ver_plus_num}-bbrplus
         detele_kernel_head
-        headurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-5.17/releases' | grep ${github_ver_plus} | grep 'rpm' | grep 'headers' | grep 'el7' | awk -F '"' '{print $4}')
-        imgurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-5.17/releases' | grep ${github_ver_plus} | grep 'rpm' | grep -v 'devel' | grep -v 'headers' | grep -v 'Source' | grep 'el7' | awk -F '"' '{print $4}')
+        headurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-6.x_stable/releases' | grep ${github_ver_plus} | grep 'rpm' | grep 'headers' | grep 'el7' | awk -F '"' '{print $4}' | grep 'http')
+        imgurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-6.x_stable/releases' | grep ${github_ver_plus} | grep 'rpm' | grep -v 'devel' | grep -v 'headers' | grep -v 'Source' | grep 'el7' | awk -F '"' '{print $4}' | grep 'http')
 
         headurl=$(check_cn $headurl)
         imgurl=$(check_cn $imgurl)
-        echo -e "正在检查headers下载连接...."
-        checkurl $headurl
-        echo -e "正在检查内核下载连接...."
-        checkurl $imgurl
-        wget -N -O kernel-c7.rpm $headurl
-        wget -N -O kernel-headers-c7.rpm $imgurl
+
+        wget -O kernel-c7.rpm $headurl
+        wget -O kernel-headers-c7.rpm $imgurl
         yum install -y kernel-c7.rpm
         yum install -y kernel-headers-c7.rpm
       else
@@ -479,63 +926,54 @@ installbbrplusnew() {
       if [[ ${bit} == "x86_64" ]]; then
         #github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Centos_Kernel' | grep '_latest_bbrplus_' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
         #github_ver=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'rpm' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}' | awk -F '[_]' '{print $1}')
-        #echo -e "获取的版本号为:${github_ver}"
-        kernel_version=${github_ver_plus_num}
+        #echo -e "获取的版本号为:${Green_font_prefix}${github_ver}${Font_color_suffix}"
+        kernel_version=${github_ver_plus_num}-bbrplus
         detele_kernel_head
-        headurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-5.17/releases' | grep ${github_ver_plus} | grep 'rpm' | grep 'headers' | grep 'el8' | awk -F '"' '{print $4}')
-        imgurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-5.17/releases' | grep ${github_ver_plus} | grep 'rpm' | grep -v 'devel' | grep -v 'headers' | grep -v 'Source' | grep 'el8' | awk -F '"' '{print $4}')
+        headurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-6.x_stable/releases' | grep ${github_ver_plus} | grep 'rpm' | grep 'headers' | grep 'el8.x86_64' | grep 'https' | awk -F '"' '{print $4}' | grep 'http')
+        imgurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-6.x_stable/releases' | grep ${github_ver_plus} | grep 'rpm' | grep -v 'devel' | grep -v 'headers' | grep -v 'Source' | grep 'el8.x86_64' | grep 'https' | awk -F '"' '{print $4}' | grep 'http')
 
         headurl=$(check_cn $headurl)
         imgurl=$(check_cn $imgurl)
-        echo -e "正在检查headers下载连接...."
-        checkurl $headurl
-        echo -e "正在检查内核下载连接...."
-        checkurl $imgurl
-        wget -N -O kernel-c8.rpm $headurl
-        wget -N -O kernel-headers-c8.rpm $imgurl
+
+        wget -O kernel-c8.rpm $headurl
+        wget -O kernel-headers-c8.rpm $imgurl
         yum install -y kernel-c8.rpm
         yum install -y kernel-headers-c8.rpm
       else
         echo -e "${Error} 不支持x86_64以外的系统 !" && exit 1
       fi
     fi
-  elif [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
+  elif [[ "${OS_type}" == "Debian" ]]; then
     if [[ ${bit} == "x86_64" ]]; then
       #github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Ubuntu_Kernel' | grep '_latest_bbrplus_' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
       #github_ver=$(curl -s 'http s://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'deb' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}' | awk -F '[_]' '{print $1}')
-      #echo -e "获取的版本号为:${github_ver}"
+      #echo -e "获取的版本号为:${Green_font_prefix}${github_ver}${Font_color_suffix}"
       kernel_version=${github_ver_plus_num}-bbrplus
       detele_kernel_head
-      headurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-5.17/releases' | grep ${github_ver_plus} | grep 'https' | grep 'amd64.deb' | grep 'headers' | awk -F '"' '{print $4}')
-      imgurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-5.17/releases' | grep ${github_ver_plus} | grep 'https' | grep 'amd64.deb' | grep 'image' | awk -F '"' '{print $4}')
+      headurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-6.x_stable/releases' | grep ${github_ver_plus} | grep 'https' | grep 'amd64.deb' | grep 'headers' | awk -F '"' '{print $4}' | grep 'http')
+      imgurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-6.x_stable/releases' | grep ${github_ver_plus} | grep 'https' | grep 'amd64.deb' | grep 'image' | awk -F '"' '{print $4}' | grep 'http')
 
       headurl=$(check_cn $headurl)
       imgurl=$(check_cn $imgurl)
-      echo -e "正在检查headers下载连接...."
-      checkurl $headurl
-      echo -e "正在检查内核下载连接...."
-      checkurl $imgurl
-      wget -N -O linux-headers-d10.deb $headurl
-      wget -N -O linux-image-d10.deb $imgurl
+
+      download_file $headurl linux-headers-d10.deb
+      download_file $imgurl linux-image-d10.deb
       dpkg -i linux-image-d10.deb
       dpkg -i linux-headers-d10.deb
     elif [[ ${bit} == "aarch64" ]]; then
       #github_tag=$(curl -s 'https://api.github.com/repos/ylx2016/kernel/releases' | grep 'Ubuntu_Kernel' | grep '_latest_bbrplus_' | head -n 1 | awk -F '"' '{print $4}' | awk -F '[/]' '{print $8}')
       #github_ver=$(curl -s 'http s://api.github.com/repos/ylx2016/kernel/releases' | grep ${github_tag} | grep 'deb' | grep 'headers' | awk -F '"' '{print $4}' | awk -F '[/]' '{print $9}' | awk -F '[-]' '{print $3}' | awk -F '[_]' '{print $1}')
-      #echo -e "获取的版本号为:${github_ver}"
+      #echo -e "获取的版本号为:${Green_font_prefix}${github_ver}${Font_color_suffix}"
       kernel_version=${github_ver_plus_num}-bbrplus
       detele_kernel_head
-      headurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-5.17/releases' | grep ${github_ver_plus} | grep 'https' | grep 'arm64.deb' | grep 'headers' | awk -F '"' '{print $4}')
-      imgurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-5.17/releases' | grep ${github_ver_plus} | grep 'https' | grep 'arm64.deb' | grep 'image' | awk -F '"' '{print $4}')
+      headurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-6.x_stable/releases' | grep ${github_ver_plus} | grep 'https' | grep 'arm64.deb' | grep 'headers' | awk -F '"' '{print $4}')
+      imgurl=$(curl -s 'https://api.github.com/repos/UJX6N/bbrplus-6.x_stable/releases' | grep ${github_ver_plus} | grep 'https' | grep 'arm64.deb' | grep 'image' | awk -F '"' '{print $4}')
 
       headurl=$(check_cn $headurl)
       imgurl=$(check_cn $imgurl)
-      echo -e "正在检查headers下载连接...."
-      checkurl $headurl
-      echo -e "正在检查内核下载连接...."
-      checkurl $imgurl
-      wget -N -O linux-headers-d10.deb $headurl
-      wget -N -O linux-image-d10.deb $imgurl
+
+      download_file $headurl linux-headers-d10.deb
+      download_file $imgurl linux-image-d10.deb
       dpkg -i linux-image-d10.deb
       dpkg -i linux-headers-d10.deb
     else
@@ -589,7 +1027,7 @@ startbbrplus() {
 #启用Lotserver
 startlotserver() {
   remove_bbr_lotserver
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     yum install ethtool -y
   else
     apt-get update || apt-get --allow-releaseinfo-change update
@@ -750,319 +1188,59 @@ remove_all() {
   sleep 1s
 }
 
-#优化系统配置
-optimizing_system() {
-  if [ ! -f "/etc/sysctl.conf" ]; then
-    touch /etc/sysctl.conf
-  fi
-  sed -i '/net.ipv4.tcp_retries2/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.tcp_slow_start_after_idle/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.tcp_fastopen/d' /etc/sysctl.conf
-  sed -i '/fs.file-max/d' /etc/sysctl.conf
-  sed -i '/fs.inotify.max_user_instances/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.tcp_syncookies/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.tcp_fin_timeout/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.tcp_tw_reuse/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.tcp_max_syn_backlog/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.ip_local_port_range/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.tcp_max_tw_buckets/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.route.gc_timeout/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.tcp_synack_retries/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.tcp_syn_retries/d' /etc/sysctl.conf
-  sed -i '/net.core.somaxconn/d' /etc/sysctl.conf
-  sed -i '/net.core.netdev_max_backlog/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.tcp_timestamps/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.tcp_max_orphans/d' /etc/sysctl.conf
-  sed -i '/net.ipv4.ip_forward/d' /etc/sysctl.conf
 
-  echo "net.ipv4.tcp_retries2 = 8
-net.ipv4.tcp_slow_start_after_idle = 0
-fs.file-max = 1000000
-fs.inotify.max_user_instances = 8192
-net.ipv4.tcp_syncookies = 1
-net.ipv4.tcp_fin_timeout = 30
-net.ipv4.tcp_tw_reuse = 1
-net.ipv4.ip_local_port_range = 1024 65000
-net.ipv4.tcp_max_syn_backlog = 16384
-net.ipv4.tcp_max_tw_buckets = 6000
-net.ipv4.route.gc_timeout = 100
-net.ipv4.tcp_syn_retries = 1
-net.ipv4.tcp_synack_retries = 1
-net.core.somaxconn = 32768
-net.core.netdev_max_backlog = 32768
-net.ipv4.tcp_timestamps = 0
-net.ipv4.tcp_max_orphans = 32768
-# forward ipv4
-#net.ipv4.ip_forward = 1" >>/etc/sysctl.conf
-  sysctl -p
-  echo "*               soft    nofile           1000000
-*               hard    nofile          1000000" >/etc/security/limits.conf
-  echo "ulimit -SHn 1000000" >>/etc/profile
-  read -p "需要重启VPS后，才能生效系统优化配置，是否现在重启 ? [Y/n] :" yn
-  [ -z "${yn}" ] && yn="y"
-  if [[ $yn == [Yy] ]]; then
-    echo -e "${Info} VPS 重启中..."
-    reboot
-  fi
-}
-
-optimizing_system_johnrosen1() {
-  if [ ! -f "/etc/sysctl.d/99-sysctl.conf" ]; then
-    touch /etc/sysctl.d/99-sysctl.conf
-  fi
-  sed -i '/kernel.pid_max/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/vm.nr_hugepages/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.core.optmem_max/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.all.route_localnet/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.ip_forward/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.all.forwarding/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.default.forwarding/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.conf.all.forwarding/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.conf.default.forwarding/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.conf.lo.forwarding/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.conf.all.disable_ipv6/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.conf.default.disable_ipv6/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.conf.lo.disable_ipv6/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.conf.all.accept_ra/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.conf.default.accept_ra/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.conf.default.accept_ra/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.core.netdev_max_backlog/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.core.netdev_budget/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.core.netdev_budget_usecs/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/fs.file-max /d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.core.rmem_max/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.core.wmem_max/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.core.rmem_default/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.core.wmem_default/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.core.somaxconn/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.icmp_echo_ignore_all/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.icmp_echo_ignore_broadcasts/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.icmp_ignore_bogus_error_responses/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.all.accept_redirects/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.default.accept_redirects/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.all.secure_redirects/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.default.secure_redirects/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.all.send_redirects/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.default.send_redirects/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.default.rp_filter/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.all.rp_filter/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_keepalive_time/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_keepalive_intvl/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_keepalive_probes/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_synack_retries/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_syncookies/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_rfc1337/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_timestamps/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_tw_reuse/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_fin_timeout/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.ip_local_port_range/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_max_tw_buckets/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_fastopen/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_rmem/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_wmem/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.udp_rmem_min/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.udp_wmem_min/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_mtu_probing/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.all.arp_ignore /d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.default.arp_ignore/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.all.arp_announce/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.conf.default.arp_announce/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_autocorking/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_slow_start_after_idle/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_max_syn_backlog/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.core.default_qdisc/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_notsent_lowat/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_no_metrics_save/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_ecn/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_ecn_fallback/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.tcp_frto/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.conf.all.accept_redirects/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.conf.default.accept_redirects/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/vm.swappiness/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.ip_unprivileged_port_start/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/vm.overcommit_memory/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.neigh.default.gc_thresh3/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.neigh.default.gc_thresh2/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv4.neigh.default.gc_thresh1/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.neigh.default.gc_thresh3/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.neigh.default.gc_thresh2/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.ipv6.neigh.default.gc_thresh1/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.netfilter.nf_conntrack_max/d' /etc/sysctl.d/99-sysctl.conf
-  sed -i '/net.nf_conntrack_max/d' /etc/sysctl.d/99-sysctl.conf
-
-  cat >'/etc/sysctl.d/99-sysctl.conf' <<EOF
-net.ipv4.conf.all.route_localnet=1
-net.ipv4.ip_forward = 1
-net.ipv4.conf.all.forwarding = 1
-net.ipv4.conf.default.forwarding = 1
-net.ipv6.conf.all.forwarding = 1
-net.ipv6.conf.default.forwarding = 1
-net.ipv6.conf.lo.forwarding = 1
-net.ipv6.conf.all.disable_ipv6 = 0
-net.ipv6.conf.default.disable_ipv6 = 0
-net.ipv6.conf.lo.disable_ipv6 = 0
-net.ipv6.conf.all.accept_ra = 2
-net.ipv6.conf.default.accept_ra = 2
-net.core.netdev_max_backlog = 100000
-net.core.netdev_budget = 50000
-net.core.netdev_budget_usecs = 5000
-#fs.file-max = 51200
-net.core.rmem_max = 67108864
-net.core.wmem_max = 67108864
-net.core.rmem_default = 67108864
-net.core.wmem_default = 67108864
-net.core.optmem_max = 65536
-net.core.somaxconn = 1000000
-net.ipv4.icmp_echo_ignore_all = 0
-net.ipv4.icmp_echo_ignore_broadcasts = 1
-net.ipv4.icmp_ignore_bogus_error_responses = 1
-net.ipv4.conf.all.accept_redirects = 0
-net.ipv4.conf.default.accept_redirects = 0
-net.ipv4.conf.all.secure_redirects = 0
-net.ipv4.conf.default.secure_redirects = 0
-net.ipv4.conf.all.send_redirects = 0
-net.ipv4.conf.default.send_redirects = 0
-net.ipv4.conf.default.rp_filter = 0
-net.ipv4.conf.all.rp_filter = 0
-net.ipv4.tcp_keepalive_time = 600
-net.ipv4.tcp_keepalive_intvl = 15
-net.ipv4.tcp_keepalive_probes = 2
-net.ipv4.tcp_synack_retries = 1
-net.ipv4.tcp_syncookies = 1
-net.ipv4.tcp_rfc1337 = 0
-net.ipv4.tcp_timestamps = 1
-net.ipv4.tcp_tw_reuse = 0
-net.ipv4.tcp_fin_timeout = 15
-net.ipv4.ip_local_port_range = 1024 65535
-net.ipv4.tcp_max_tw_buckets = 5000
-net.ipv4.tcp_fastopen = 4
-net.ipv4.tcp_rmem = 4096 87380 67108864
-net.ipv4.tcp_wmem = 4096 65536 67108864
-net.ipv4.udp_rmem_min = 8192
-net.ipv4.udp_wmem_min = 8192
-net.ipv4.tcp_mtu_probing = 1
-net.ipv4.tcp_autocorking = 0
-net.ipv4.tcp_slow_start_after_idle = 0
-net.ipv4.tcp_max_syn_backlog = 819200
-net.ipv4.tcp_notsent_lowat = 16384
-net.ipv4.tcp_no_metrics_save = 0
-net.ipv4.tcp_ecn = 1
-net.ipv4.tcp_ecn_fallback = 1
-net.ipv4.tcp_frto = 0
-net.ipv6.conf.all.accept_redirects = 0
-net.ipv6.conf.default.accept_redirects = 0
-net.ipv4.neigh.default.gc_thresh3=8192
-net.ipv4.neigh.default.gc_thresh2=4096
-net.ipv4.neigh.default.gc_thresh1=2048
-net.ipv6.neigh.default.gc_thresh3=8192
-net.ipv6.neigh.default.gc_thresh2=4096
-net.ipv6.neigh.default.gc_thresh1=2048
-net.ipv4.tcp_orphan_retries = 1
-net.ipv4.tcp_retries2 = 5
-vm.swappiness = 1
-vm.overcommit_memory = 1
-kernel.pid_max=64000
-net.netfilter.nf_conntrack_max = 262144
-net.nf_conntrack_max = 262144
-## Enable bbr
-net.core.default_qdisc = fq
-net.ipv4.tcp_congestion_control = bbr
-net.ipv4.tcp_low_latency = 1
-EOF
-  sysctl -p
-  sysctl --system
-  echo madvise >/sys/kernel/mm/transparent_hugepage/enabled
-
-  cat >'/etc/systemd/system.conf' <<EOF
-[Manager]
-#DefaultTimeoutStartSec=90s
-DefaultTimeoutStopSec=30s
-#DefaultRestartSec=100ms
-DefaultLimitCORE=infinity
-DefaultLimitNOFILE=infinity
-DefaultLimitNPROC=infinity
-DefaultTasksMax=infinity
-EOF
-
-  cat > '/etc/security/limits.conf' << EOF
-root     soft   nofile    1000000
-root     hard   nofile    1000000
-root     soft   nproc     unlimited
-root     hard   nproc     unlimited
-root     soft   core      unlimited
-root     hard   core      unlimited
-root     hard   memlock   unlimited
-root     soft   memlock   unlimited
-*     soft   nofile    1000000
-*     hard   nofile    1000000
-*     soft   nproc     unlimited
-*     hard   nproc     unlimited
-*     soft   core      unlimited
-*     hard   core      unlimited
-*     hard   memlock   unlimited
-*     soft   memlock   unlimited
-EOF
-  if grep -q "ulimit" /etc/profile; then
-    :
-  else
-    sed -i '/ulimit -SHn/d' /etc/profile
-    sed -i '/ulimit -SHu/d' /etc/profile
-    echo "ulimit -SHn 1000000" >> /etc/profile
-  fi
-  if grep -q "pam_limits.so" /etc/pam.d/common-session; then
-    :
-  else
-    sed -i '/required pam_limits.so/d' /etc/pam.d/common-session
-    echo "session required pam_limits.so" >> /etc/pam.d/common-session
-  fi
-  systemctl daemon-reload
-  echo -e "${Info}johnrosen1优化方案应用结束，可能需要重启！"
-}
 
 optimizing_ddcc() {
-sed -i '/net.ipv4.conf.all.rp_filter/d' /etc/sysctl.d/99-sysctl.conf
-sed -i '/net.ipv4.tcp_syncookies/d' /etc/sysctl.d/99-sysctl.conf
-sed -i '/net.ipv4.tcp_max_syn_backlog/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.conf.all.rp_filter/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_syncookies/d' /etc/sysctl.d/99-sysctl.conf
+  sed -i '/net.ipv4.tcp_max_syn_backlog/d' /etc/sysctl.d/99-sysctl.conf
 
-echo "net.ipv4.conf.all.rp_filter = 1" >> /etc/sysctl.d/99-sysctl.conf
-echo "net.ipv4.tcp_syncookies = 1" >> /etc/sysctl.d/99-sysctl.conf
-echo "net.ipv4.tcp_max_syn_backlog = 1024" >> /etc/sysctl.d/99-sysctl.conf
-sysctl -p
-sysctl --system
+  echo "net.ipv4.conf.all.rp_filter = 1" >>/etc/sysctl.d/99-sysctl.conf
+  echo "net.ipv4.tcp_syncookies = 1" >>/etc/sysctl.d/99-sysctl.conf
+  echo "net.ipv4.tcp_max_syn_backlog = 1024" >>/etc/sysctl.d/99-sysctl.conf
+  sysctl -p
+  sysctl --system
 }
 
 #更新脚本
 Update_Shell() {
-  echo -e "当前版本为 [ ${sh_ver} ]，开始检测最新版本..."
-  sh_new_ver=$(wget -qO- "https://github.com/ylx2016/Linux-NetSpeed/raw/master/tcpx.sh" | grep 'sh_ver="' | awk -F "=" '{print $NF}' | sed 's/\"//g' | head -1)
-  [[ -z ${sh_new_ver} ]] && echo -e "${Error} 检测最新版本失败 !" && start_menu
-  if [ ${sh_new_ver} != ${sh_ver} ]; then
-    echo -e "发现新版本[ ${sh_new_ver} ]，是否更新？[Y/n]"
-    read -p "(默认: y):" yn
-    [[ -z "${yn}" ]] && yn="y"
-    if [[ ${yn} == [Yy] ]]; then
-      wget -N "https://${github}/tcpx.sh" && chmod +x tcpx.sh && ./tcpx.sh
-      echo -e "脚本已更新为最新版本[ ${sh_new_ver} ] !"
-    else
-      echo && echo "	已取消..." && echo
-    fi
+  local shell_file
+  shell_file="$(readlink -f "$0")"
+  local shell_url="https://raw.githubusercontent.com/ylx2016/Linux-NetSpeed/master/tcpx.sh"
+
+  # 下载最新版本的脚本
+  wget -O "/tmp/tcpx.sh" "$shell_url" &>/dev/null
+
+  # 比较本地和远程脚本的 md5 值
+  local md5_local
+  local md5_remote
+  md5_local="$(md5sum "$shell_file" | awk '{print $1}')"
+  md5_remote="$(md5sum /tmp/tcpx.sh | awk '{print $1}')"
+
+  if [ "$md5_local" != "$md5_remote" ]; then
+    # 替换本地脚本文件
+    cp "/tmp/tcpx.sh" "$shell_file"
+    chmod +x "$shell_file"
+
+    echo "脚本已更新，请重新运行。"
+    exit 0
   else
-    echo -e "当前已是最新版本[ ${sh_new_ver} ] !"
-    sleep 2s && ./tcpx.sh
+    echo "脚本是最新版本，无需更新。"
   fi
 }
 
 #切换到卸载内核版本
 gototcp() {
   clear
-  wget -O tcp.sh "https://github.com/ylx2016/Linux-NetSpeed/raw/master/tcp.sh" && chmod +x tcp.sh && ./tcp.sh
+  #wget -O tcp.sh "https://github.com/ylx2016/Linux-NetSpeed/raw/master/tcp.sh" && chmod +x tcp.sh && ./tcp.sh
+  bash <(wget -qO- https://github.com/ylx2016/Linux-NetSpeed/raw/master/tcp.sh)
 }
 
 #切换到秋水逸冰BBR安装脚本
 gototeddysun_bbr() {
   clear
-  wget https://github.com/teddysun/across/raw/master/bbr.sh && chmod +x bbr.sh && ./bbr.sh
+  #wget https://github.com/teddysun/across/raw/master/bbr.sh && chmod +x bbr.sh && ./bbr.sh
+  bash <(wget -qO- https://github.com/teddysun/across/raw/master/bbr.sh)
 }
 
 #切换到一键DD安装系统脚本 新手勿入
@@ -1070,8 +1248,17 @@ gotodd() {
   clear
   echo DD使用git.beta.gs的脚本，知悉
   sleep 1.5
-  wget -O NewReinstall.sh https://github.com/fcurrk/reinstall/raw/master/NewReinstall.sh && chmod a+x NewReinstall.sh && bash NewReinstall.sh
+  #wget -O NewReinstall.sh https://github.com/fcurrk/reinstall/raw/master/NewReinstall.sh && chmod a+x NewReinstall.sh && bash NewReinstall.sh
+  bash <(wget -qO- https://github.com/fcurrk/reinstall/raw/master/NewReinstall.sh)
   #wget -qO ~/Network-Reinstall-System-Modify.sh 'https://github.com/ylx2016/reinstall/raw/master/Network-Reinstall-System-Modify.sh' && chmod a+x ~/Network-Reinstall-System-Modify.sh && bash ~/Network-Reinstall-System-Modify.sh -UI_Options
+}
+
+#切换到检查当前IP质量/媒体解锁/邮箱通信脚本
+gotoipcheck() {
+  clear
+  sleep 1.5
+  bash <(wget -qO- https://raw.githubusercontent.com/xykt/IPQuality/main/ip.sh)
+  #bash <(wget -qO- https://IP.Check.Place) 
 }
 
 #禁用IPv6
@@ -1100,10 +1287,14 @@ openipv6() {
   sed -i '/net.ipv6.conf.all.disable_ipv6/d' /etc/sysctl.conf
   sed -i '/net.ipv6.conf.default.disable_ipv6/d' /etc/sysctl.conf
   sed -i '/net.ipv6.conf.lo.disable_ipv6/d' /etc/sysctl.conf
+  sed -i '/net.ipv6.conf.all.accept_ra/d' /etc/sysctl.conf
+  sed -i '/net.ipv6.conf.default.accept_ra/d' /etc/sysctl.conf
 
   echo "net.ipv6.conf.all.disable_ipv6 = 0
 net.ipv6.conf.default.disable_ipv6 = 0
-net.ipv6.conf.lo.disable_ipv6 = 0" >>/etc/sysctl.d/99-sysctl.conf
+net.ipv6.conf.lo.disable_ipv6 = 0
+net.ipv6.conf.all.accept_ra = 2
+net.ipv6.conf.default.accept_ra = 2" >>/etc/sysctl.d/99-sysctl.conf
   sysctl --system
   echo -e "${Info}开启IPv6结束，可能需要重启！"
 }
@@ -1114,18 +1305,18 @@ start_menu() {
   echo && echo -e " TCP加速 一键安装管理脚本 ${Red_font_prefix}[v${sh_ver}] 不卸内核${Font_color_suffix} from blog.ylx.me 母鸡慎用
  ${Green_font_prefix}0.${Font_color_suffix} 升级脚本
  ${Green_font_prefix}9.${Font_color_suffix} 切换到卸载内核版本		${Green_font_prefix}10.${Font_color_suffix} 切换到一键DD系统脚本
+ ${Green_font_prefix}60.${Font_color_suffix} 切换到检查当前IP质量/媒体解锁/邮箱通信脚本
  ${Green_font_prefix}1.${Font_color_suffix} 安装 BBR原版内核		${Green_font_prefix}7.${Font_color_suffix} 安装 Zen官方版内核
  ${Green_font_prefix}2.${Font_color_suffix} 安装 BBRplus版内核		${Green_font_prefix}5.${Font_color_suffix} 安装 BBRplus新版内核
- ${Green_font_prefix}3.${Font_color_suffix} 安装 Lotserver(锐速)内核	${Green_font_prefix}6.${Font_color_suffix} 安装 xanmod版内核
+ ${Green_font_prefix}3.${Font_color_suffix} 安装 Lotserver(锐速)内核	${Green_font_prefix}36.${Font_color_suffix} 安装 XANMOD官方内核(EDGE)
  ${Green_font_prefix}30.${Font_color_suffix} 安装 官方稳定内核		${Green_font_prefix}31.${Font_color_suffix} 安装 官方最新内核 backports/elrepo
- ${Green_font_prefix}32.${Font_color_suffix} 安装 XANMOD官方内核	${Green_font_prefix}33.${Font_color_suffix} 安装 XANMOD官方高响应内核
+ ${Green_font_prefix}32.${Font_color_suffix} 安装 XANMOD官方内核(main)	${Green_font_prefix}33.${Font_color_suffix} 安装 XANMOD官方内核(LTS)
  ${Green_font_prefix}11.${Font_color_suffix} 使用BBR+FQ加速		${Green_font_prefix}12.${Font_color_suffix} 使用BBR+FQ_PIE加速 
- ${Green_font_prefix}13.${Font_color_suffix} 使用BBR+CAKE加速
- ${Green_font_prefix}14.${Font_color_suffix} 使用BBR2+FQ加速	 	${Green_font_prefix}15.${Font_color_suffix} 使用BBR2+FQ_PIE加速 
- ${Green_font_prefix}16.${Font_color_suffix} 使用BBR2+CAKE加速
+ ${Green_font_prefix}13.${Font_color_suffix} 使用BBR+CAKE加速		${Green_font_prefix}14.${Font_color_suffix} 使用BBR2+FQ加速
+ ${Green_font_prefix}15.${Font_color_suffix} 使用BBR2+FQ_PIE加速	${Green_font_prefix}16.${Font_color_suffix} 使用BBR2+CAKE加速
  ${Green_font_prefix}17.${Font_color_suffix} 开启ECN	 		${Green_font_prefix}18.${Font_color_suffix} 关闭ECN
  ${Green_font_prefix}19.${Font_color_suffix} 使用BBRplus+FQ版加速       ${Green_font_prefix}20.${Font_color_suffix} 使用Lotserver(锐速)加速
- ${Green_font_prefix}21.${Font_color_suffix} 系统配置优化	 	${Green_font_prefix}22.${Font_color_suffix} 应用johnrosen1的优化方案
+ ${Green_font_prefix}21.${Font_color_suffix} 系统配置优化	 	${Green_font_prefix}22.${Font_color_suffix} 应用优化方案2
  ${Green_font_prefix}23.${Font_color_suffix} 禁用IPv6	 		${Green_font_prefix}24.${Font_color_suffix} 开启IPv6
  ${Green_font_prefix}51.${Font_color_suffix} 查看排序内核               ${Green_font_prefix}52.${Font_color_suffix} 删除保留指定内核
  ${Green_font_prefix}25.${Font_color_suffix} 卸载全部加速	 	${Green_font_prefix}99.${Font_color_suffix} 退出脚本 
@@ -1158,12 +1349,9 @@ start_menu() {
   5)
     check_sys_bbrplusnew
     ;;
-  6)
-    check_sys_xanmod
-    ;;
   7)
     check_sys_official_zen
-    ;;	
+    ;;
   30)
     check_sys_official
     ;;
@@ -1171,10 +1359,13 @@ start_menu() {
     check_sys_official_bbr
     ;;
   32)
-    check_sys_official_xanmod
+    check_sys_official_xanmod_main
     ;;
   33)
-    check_sys_official_xanmod_cacule
+    check_sys_official_xanmod_lts
+    ;;
+  36)
+    check_sys_official_xanmod_edge
     ;;
   9)
     gototcp
@@ -1182,6 +1373,9 @@ start_menu() {
   10)
     gotodd
     ;;
+  60)
+    gotoipcheck
+    ;;	
   11)
     startbbrfq
     ;;
@@ -1229,7 +1423,7 @@ start_menu() {
     ;;
   26)
     optimizing_ddcc
-    ;;	
+    ;;
   51)
     BBR_grub
     ;;
@@ -1251,7 +1445,7 @@ start_menu() {
 
 #删除多余内核
 detele_kernel() {
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     rpm_total=$(rpm -qa | grep kernel | grep -v "${kernel_version}" | grep -v "noarch" | wc -l)
     if [ "${rpm_total}" ] >"1"; then
       echo -e "检测到 ${rpm_total} 个其余内核，开始卸载..."
@@ -1265,7 +1459,7 @@ detele_kernel() {
     else
       echo -e " 检测到 内核 数量不正确，请检查 !" && exit 1
     fi
-  elif [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
+  elif [[ "${OS_type}" == "Debian" ]]; then
     deb_total=$(dpkg -l | grep linux-image | awk '{print $2}' | grep -v "${kernel_version}" | wc -l)
     if [ "${deb_total}" ] >"1"; then
       echo -e "检测到 ${deb_total} 个其余内核，开始卸载..."
@@ -1273,7 +1467,7 @@ detele_kernel() {
         deb_del=$(dpkg -l | grep linux-image | awk '{print $2}' | grep -v "${kernel_version}" | head -${integer})
         echo -e "开始卸载 ${deb_del} 内核..."
         apt-get purge -y ${deb_del}
-		apt-get autoremove -y
+        apt-get autoremove -y
         echo -e "卸载 ${deb_del} 内核卸载完成，继续..."
       done
       echo -e "内核卸载完毕，继续..."
@@ -1284,7 +1478,7 @@ detele_kernel() {
 }
 
 detele_kernel_head() {
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     rpm_total=$(rpm -qa | grep kernel-headers | grep -v "${kernel_version}" | grep -v "noarch" | wc -l)
     if [ "${rpm_total}" ] >"1"; then
       echo -e "检测到 ${rpm_total} 个其余head内核，开始卸载..."
@@ -1298,7 +1492,7 @@ detele_kernel_head() {
     else
       echo -e " 检测到 内核 数量不正确，请检查 !" && exit 1
     fi
-  elif [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
+  elif [[ "${OS_type}" == "Debian" ]]; then
     deb_total=$(dpkg -l | grep linux-headers | awk '{print $2}' | grep -v "${kernel_version}" | wc -l)
     if [ "${deb_total}" ] >"1"; then
       echo -e "检测到 ${deb_total} 个其余head内核，开始卸载..."
@@ -1306,7 +1500,7 @@ detele_kernel_head() {
         deb_del=$(dpkg -l | grep linux-headers | awk '{print $2}' | grep -v "${kernel_version}" | head -${integer})
         echo -e "开始卸载 ${deb_del} headers内核..."
         apt-get purge -y ${deb_del}
-		apt-get autoremove -y
+        apt-get autoremove -y
         echo -e "卸载 ${deb_del} 内核卸载完成，继续..."
       done
       echo -e "内核卸载完毕，继续..."
@@ -1326,7 +1520,7 @@ detele_kernel_custom() {
 
 #更新引导
 BBR_grub() {
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     if [[ ${version} == "6" ]]; then
       if [ -f "/boot/grub/grub.conf" ]; then
         sed -i 's/^default=.*/default=0/g' /boot/grub/grub.conf
@@ -1373,7 +1567,7 @@ BBR_grub() {
       fi
       grubby --info=ALL | awk -F= '$1=="kernel" {print i++ " : " $2}'
     fi
-  elif [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
+  elif [[ "${OS_type}" == "Debian" ]]; then
     if _exists "update-grub"; then
       update-grub
     elif [ -f "/usr/sbin/update-grub" ]; then
@@ -1384,12 +1578,16 @@ BBR_grub() {
     fi
     #exit 1
   fi
+ check_disk_space
 }
 
 #简单的检查内核
 check_kernel() {
-  echo -e "${Tip} 鉴于1次人工检查有人不看，下面是2次脚本简易检查内核，开始匹配 /boot/vmlinuz-* 文件"
-  ls /boot/vmlinuz-* -I rescue -1 || echo -e "${Error} 没有匹配到 /boot/vmlinuz-* 文件，很有可能没有内核，谨慎重启，在结合上面第一道检查确认没有内核的情况下，你可以尝试按9切换到不卸载内核选择30安装默认内核救急，此时你应该给我反馈！" && exit
+  if [[ -z "$(find /boot -type f -name 'vmlinuz-*' ! -name 'vmlinuz-*rescue*')" ]]; then
+    echo -e "\033[0;31m警告: 未发现内核文件，请勿重启系统，不卸载内核版本选择30安装默认内核救急！\033[0m"
+  else
+    echo -e "\033[0;32m发现内核文件，看起来可以重启。\033[0m"
+  fi
 }
 
 #############内核管理组件#############
@@ -1400,18 +1598,22 @@ check_kernel() {
 check_sys() {
   if [[ -f /etc/redhat-release ]]; then
     release="centos"
-  elif cat /etc/issue | grep -q -E -i "debian"; then
+  elif grep -qi "debian" /etc/issue; then
     release="debian"
-  elif cat /etc/issue | grep -q -E -i "ubuntu"; then
+  elif grep -qi "ubuntu" /etc/issue; then
     release="ubuntu"
-  elif cat /etc/issue | grep -q -E -i "centos|red hat|redhat"; then
+  elif grep -qi -E "centos|red hat|redhat" /etc/issue || grep -qi -E "centos|red hat|redhat" /proc/version; then
     release="centos"
-  elif cat /proc/version | grep -q -E -i "debian"; then
-    release="debian"
-  elif cat /proc/version | grep -q -E -i "ubuntu"; then
-    release="ubuntu"
-  elif cat /proc/version | grep -q -E -i "centos|red hat|redhat"; then
-    release="centos"
+  fi
+
+  if [[ -f /etc/debian_version ]]; then
+    OS_type="Debian"
+    echo "检测为Debian通用系统，判断有误请反馈"
+  elif [[ -f /etc/redhat-release || -f /etc/centos-release || -f /etc/fedora-release ]]; then
+    OS_type="CentOS"
+    echo "检测为CentOS通用系统，判断有误请反馈"
+  else
+    echo "Unknown"
   fi
 
   #from https://github.com/oooldking
@@ -1430,86 +1632,23 @@ check_sys() {
   }
 
   get_opsy() {
-    [ -f /etc/redhat-release ] && awk '{print ($1,$3~/^[0-9]/?$3:$4)}' /etc/redhat-release && return
-    [ -f /etc/os-release ] && awk -F'[= "]' '/PRETTY_NAME/{print $3,$4,$5}' /etc/os-release && return
-    [ -f /etc/lsb-release ] && awk -F'[="]+' '/DESCRIPTION/{print $2}' /etc/lsb-release && return
+    if [ -f /etc/os-release ]; then
+      awk -F'[= "]' '/PRETTY_NAME/{print $3,$4,$5}' /etc/os-release
+    elif [ -f /etc/lsb-release ]; then
+      awk -F'[="]+' '/DESCRIPTION/{print $2}' /etc/lsb-release
+    elif [ -f /etc/system-release ]; then
+      cat /etc/system-release | awk '{print $1,$2}'
+    fi
   }
+
   get_system_info() {
-    #cname=$(awk -F: '/model name/ {name=$2} END {print name}' /proc/cpuinfo | sed 's/^[ \t]*//;s/[ \t]*$//')
-    #cores=$(awk -F: '/model name/ {core++} END {print core}' /proc/cpuinfo)
-    #freq=$(awk -F: '/cpu MHz/ {freq=$2} END {print freq}' /proc/cpuinfo | sed 's/^[ \t]*//;s/[ \t]*$//')
-    #corescache=$(awk -F: '/cache size/ {cache=$2} END {print cache}' /proc/cpuinfo | sed 's/^[ \t]*//;s/[ \t]*$//')
-    #tram=$(free -m | awk '/Mem/ {print $2}')
-    #uram=$(free -m | awk '/Mem/ {print $3}')
-    #bram=$(free -m | awk '/Mem/ {print $6}')
-    #swap=$(free -m | awk '/Swap/ {print $2}')
-    #uswap=$(free -m | awk '/Swap/ {print $3}')
-    #up=$(awk '{a=$1/86400;b=($1%86400)/3600;c=($1%3600)/60} {printf("%d days %d hour %d min\n",a,b,c)}' /proc/uptime)
-    #load=$(w | head -1 | awk -F'load average:' '{print $2}' | sed 's/^[ \t]*//;s/[ \t]*$//')
     opsy=$(get_opsy)
     arch=$(uname -m)
-    #lbit=$(getconf LONG_BIT)
     kern=$(uname -r)
-
-    # disk_size1=$( LANG=C df -hPl | grep -wvE '\-|none|tmpfs|overlay|shm|udev|devtmpfs|by-uuid|chroot|Filesystem' | awk '{print $2}' )
-    # disk_size2=$( LANG=C df -hPl | grep -wvE '\-|none|tmpfs|overlay|shm|udev|devtmpfs|by-uuid|chroot|Filesystem' | awk '{print $3}' )
-    # disk_total_size=$( calc_disk ${disk_size1[@]} )
-    # disk_used_size=$( calc_disk ${disk_size2[@]} )
-
-    #tcpctrl=$(sysctl net.ipv4.tcp_congestion_control | awk -F ' ' '{print $3}')
-
     virt_check
   }
   # from LemonBench
   virt_check() {
-    # if hash ifconfig 2>/dev/null; then
-    # eth=$(ifconfig)
-    # fi
-
-    # _exists "dmesg" && virtualx="$(dmesg 2>/dev/null)"
-
-    # if _exists "dmidecode"; then
-    # sys_manu="$(dmidecode -s system-manufacturer 2>/dev/null)"
-    # sys_product="$(dmidecode -s system-product-name 2>/dev/null)"
-    # sys_ver="$(dmidecode -s system-version 2>/dev/null)"
-    # else
-    # sys_manu=""
-    # sys_product=""
-    # sys_ver=""
-    # fi
-    # if   grep -qa docker /proc/1/cgroup; then
-    # virtual="Docker"
-    # elif grep -qa lxc /proc/1/cgroup; then
-    # virtual="LXC"
-    # elif grep -qa container=lxc /proc/1/environ; then
-    # virtual="LXC"
-    # elif [[ -f /proc/user_beancounters ]]; then
-    # virtual="OpenVZ"
-    # elif [[ "${virtualx}" == *kvm-clock* ]]; then
-    # virtual="KVM"
-    # elif [[ "${cname}" == *KVM* ]]; then
-    # virtual="KVM"
-    # elif [[ "${cname}" == *QEMU* ]]; then
-    # virtual="KVM"
-    # elif [[ "${virtualx}" == *"VMware Virtual Platform"* ]]; then
-    # virtual="VMware"
-    # elif [[ "${virtualx}" == *"Parallels Software International"* ]]; then
-    # virtual="Parallels"
-    # elif [[ "${virtualx}" == *VirtualBox* ]]; then
-    # virtual="VirtualBox"
-    # elif [[ -e /proc/xen ]]; then
-    # virtual="Xen"
-    # elif [[ "${sys_manu}" == *"Microsoft Corporation"* ]]; then
-    # if [[ "${sys_product}" == *"Virtual Machine"* ]]; then
-    # if [[ "${sys_ver}" == *"7.0"* || "${sys_ver}" == *"Hyper-V" ]]; then
-    # virtual="Hyper-V"
-    # else
-    # virtual="Microsoft Virtual Machine"
-    # fi
-    # fi
-    # else
-    # virtual="Dedicated母鸡"
-    # fi
     if [ -f "/usr/bin/systemd-detect-virt" ]; then
       Var_VirtType="$(/usr/bin/systemd-detect-virt)"
       # 虚拟机检测
@@ -1579,7 +1718,7 @@ check_sys() {
       Var_VirtTypeCount="$(echo $Var_VirtTypeCount | wc -l)"
       if [ "${Var_VirtTypeCount}" -gt "1" ]; then # 处理嵌套虚拟化
         virtual="echo ${Var_VirtType}"
-        Var_VirtType="$(echo ${Var_VirtType} | head -n1)" # 使用检测到的第一种虚拟化继续做判断
+        Var_VirtType="$(echo ${Var_VirtType} | head -n1)"                          # 使用检测到的第一种虚拟化继续做判断
       elif [ "${Var_VirtTypeCount}" -eq "1" ] && [ "${Var_VirtType}" != "" ]; then # 只有一种虚拟化
         virtual="${Var_VirtType}"
       else
@@ -1597,63 +1736,62 @@ check_sys() {
   }
 
   #检查依赖
-  if [[ "${release}" == "centos" ]]; then
-    if (yum list installed ca-certificates | grep '202'); then
-      echo 'CA证书检查OK'
-    else
-      echo 'CA证书检查不通过，处理中'
+  if [[ "${OS_type}" == "CentOS" ]]; then
+    # 检查是否安装了 ca-certificates 包，如果未安装则安装
+    if ! rpm -q ca-certificates >/dev/null; then
+      echo '正在安装 ca-certificates 包...'
       yum install ca-certificates -y
       update-ca-trust force-enable
     fi
-    if ! type curl >/dev/null 2>&1; then
-      echo 'curl 未安装 安装中'
-      yum install curl -y
+    echo 'CA证书检查OK'
+
+    # 检查并安装 curl、wget 和 dmidecode 包
+    for pkg in curl wget dmidecode redhat-lsb-core; do
+      if ! type $pkg >/dev/null 2>&1; then
+        echo "未安装 $pkg，正在安装..."
+        yum install $pkg -y
+      else
+        echo "$pkg 已安装。"
+      fi
+    done
+
+    if [ -x "$(command -v lsb_release)" ]; then
+      echo "lsb_release 已安装"
     else
-      echo 'curl 已安装，继续'
+      echo "lsb_release 未安装，现在开始安装..."
+      yum install epel-release -y
+      yum install redhat-lsb-core -y
     fi
 
-    if ! type wget >/dev/null 2>&1; then
-      echo 'wget 未安装 安装中'
-      yum install curl -y
-    else
-      echo 'wget 已安装，继续'
-    fi
-
-    if ! type dmidecode >/dev/null 2>&1; then
-      echo 'dmidecode 未安装 安装中'
-      yum install dmidecode -y
-    else
-      echo 'dmidecode 已安装，继续'
-    fi
-
-  elif [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
-    if (apt list --installed | grep 'ca-certificates' | grep '202'); then
-      echo 'CA证书检查OK'
-    else
-      echo 'CA证书检查不通过，处理中'
+  elif [[ "${OS_type}" == "Debian" ]]; then
+    # 检查是否安装了 ca-certificates 包，如果未安装则安装
+    if ! dpkg-query -W ca-certificates >/dev/null; then
+      echo '正在安装 ca-certificates 包...'
       apt-get update || apt-get --allow-releaseinfo-change update && apt-get install ca-certificates -y
       update-ca-certificates
     fi
-    if ! type curl >/dev/null 2>&1; then
-      echo 'curl 未安装 安装中'
-      apt-get update || apt-get --allow-releaseinfo-change update && apt-get install curl -y
+    echo 'CA证书检查OK'
+
+    # 检查并安装 curl、wget 和 dmidecode 包
+    for pkg in curl wget dmidecode; do
+      if ! type $pkg >/dev/null 2>&1; then
+        echo "未安装 $pkg，正在安装..."
+        apt-get update || apt-get --allow-releaseinfo-change update && apt-get install $pkg -y
+      else
+        echo "$pkg 已安装。"
+      fi
+    done
+
+    if [ -x "$(command -v lsb_release)" ]; then
+      echo "lsb_release 已安装"
     else
-      echo 'curl 已安装，继续'
+      echo "lsb_release 未安装，现在开始安装..."
+      apt-get install lsb-release -y
     fi
 
-    if ! type wget >/dev/null 2>&1; then
-      echo 'wget 未安装 安装中'
-      apt-get update || apt-get --allow-releaseinfo-change update && apt-get install wget -y
-    else
-      echo 'wget 已安装，继续'
-    fi
-
-    if ! type dmidecode >/dev/null 2>&1; then
-      echo 'dmidecode 未安装 安装中'
-      apt-get update || apt-get --allow-releaseinfo-change update && apt-get install dmidecode -y
-    else
-      echo 'dmidecode 已安装，继续'
-    fi
+  else
+    echo "不支持的操作系统发行版：${release}"
+    exit 1
   fi
 }
 
@@ -1665,23 +1803,19 @@ check_version() {
     version=$(grep -oE "[0-9.]+" /etc/issue | cut -d . -f 1)
   fi
   bit=$(uname -m)
-  # if [[ ${bit} = "x86_64" ]]; then
-  # bit="x64"
-  # else
-  # bit="x32"
-  # fi
+  check_github
 }
 
 #检查安装bbr的系统要求
 check_sys_bbr() {
   check_version
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     if [[ ${version} == "7" ]]; then
       installbbr
     else
       echo -e "${Error} BBR内核不支持当前系统 ${release} ${version} ${bit} !" && exit 1
     fi
-  elif [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
+  elif [[ "${OS_type}" == "Debian" ]]; then
     apt-get --fix-broken install -y && apt-get autoremove -y
     installbbr
   else
@@ -1691,13 +1825,13 @@ check_sys_bbr() {
 
 check_sys_bbrplus() {
   check_version
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     if [[ ${version} == "7" ]]; then
       installbbrplus
     else
       echo -e "${Error} BBRplus内核不支持当前系统 ${release} ${version} ${bit} !" && exit 1
     fi
-  elif [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
+  elif [[ "${OS_type}" == "Debian" ]]; then
     apt-get --fix-broken install -y && apt-get autoremove -y
     installbbrplus
   else
@@ -1707,14 +1841,14 @@ check_sys_bbrplus() {
 
 check_sys_bbrplusnew() {
   check_version
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     #if [[ ${version} == "7" ]]; then
     if [[ ${version} == "7" || ${version} == "8" ]]; then
       installbbrplusnew
     else
       echo -e "${Error} BBRplusNew内核不支持当前系统 ${release} ${version} ${bit} !" && exit 1
     fi
-  elif [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
+  elif [[ "${OS_type}" == "Debian" ]]; then
     apt-get --fix-broken install -y && apt-get autoremove -y
     installbbrplusnew
   else
@@ -1724,13 +1858,13 @@ check_sys_bbrplusnew() {
 
 check_sys_xanmod() {
   check_version
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     if [[ ${version} == "7" || ${version} == "8" ]]; then
       installxanmod
     else
       echo -e "${Error} xanmod内核不支持当前系统 ${release} ${version} ${bit} !" && exit 1
     fi
-  elif [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
+  elif [[ "${OS_type}" == "Debian" ]]; then
     apt-get --fix-broken install -y && apt-get autoremove -y
     installxanmod
   else
@@ -1745,7 +1879,7 @@ check_sys_Lotsever() {
   if [[ ${bit} != "x86_64" ]]; then
     echo -e "${Error} 不支持x86_64以外的系统 !" && exit 1
   fi
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     if [[ ${version} == "6" ]]; then
       kernel_version="2.6.32-504"
       installlot
@@ -1794,7 +1928,7 @@ check_sys_Lotsever() {
 check_sys_official() {
   check_version
   bit=$(uname -m)
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     if [[ ${bit} != "x86_64" ]]; then
       echo -e "${Error} 不支持x86_64以外的系统 !" && exit 1
     fi
@@ -1806,12 +1940,14 @@ check_sys_official() {
       echo -e "${Error} 不支持当前系统 ${release} ${version} ${bit} !" && exit 1
     fi
   elif [[ "${release}" == "debian" ]]; then
+    apt update
     if [[ ${bit} == "x86_64" ]]; then
-      apt-get install linux-image-amd64 linux-headers-amd64 -y
+      apt-get update && apt-get install linux-image-amd64 linux-headers-amd64 -y
     elif [[ ${bit} == "aarch64" ]]; then
       apt-get install linux-image-arm64 linux-headers-arm64 -y
     fi
   elif [[ "${release}" == "ubuntu" ]]; then
+    apt update
     apt-get install linux-image-generic linux-headers-generic -y
   else
     echo -e "${Error} 不支持当前系统 ${release} ${version} ${bit} !" && exit 1
@@ -1824,8 +1960,11 @@ check_sys_official() {
 #检查官方最新内核并安装
 check_sys_official_bbr() {
   check_version
+  os_name=$(awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"')
+  os_version=$(awk -F= '/^VERSION_ID/{print $2}' /etc/os-release | tr -d '"')
+  os_arch=$(uname -m)
   bit=$(uname -m)
-  if [[ "${release}" == "centos" ]]; then
+  if [[ "${OS_type}" == "CentOS" ]]; then
     if [[ ${bit} != "x86_64" ]]; then
       echo -e "${Error} 不支持x86_64以外的系统 !" && exit 1
     fi
@@ -1840,32 +1979,37 @@ check_sys_official_bbr() {
       echo -e "${Error} 不支持当前系统 ${release} ${version} ${bit} !" && exit 1
     fi
   elif [[ "${release}" == "debian" ]]; then
-    if [[ ${version} == "9" ]]; then
+    case ${os_version} in
+    9)
       echo "deb http://deb.debian.org/debian stretch-backports main" >/etc/apt/sources.list.d/stretch-backports.list
-      apt update
-      if [[ ${bit} == "x86_64" ]]; then
-        apt -t stretch-backports install linux-image-amd64 linux-headers-amd64 -y
-      elif [[ ${bit} == "aarch64" ]]; then
-        apt -t stretch-backports install linux-image-arm64 linux-headers-arm64 -y
-      fi
-    elif [[ ${version} == "10" ]]; then
+      ;;
+    10)
       echo "deb http://deb.debian.org/debian buster-backports main" >/etc/apt/sources.list.d/buster-backports.list
-      apt update
-      if [[ ${bit} == "x86_64" ]]; then
-        apt -t buster-backports install linux-image-amd64 linux-headers-amd64 -y
-      elif [[ ${bit} == "aarch64" ]]; then
-        apt -t buster-backports install linux-image-arm64 linux-headers-arm64 -y
-      fi
-    elif [[ ${version} == "11" ]]; then
+      ;;
+    11)
       echo "deb http://deb.debian.org/debian bullseye-backports main" >/etc/apt/sources.list.d/bullseye-backports.list
-      apt update
-      if [[ ${bit} == "x86_64" ]]; then
-        apt -t bullseye-backports install linux-image-amd64 linux-headers-amd64 -y
-      elif [[ ${bit} == "aarch64" ]]; then
-        echo -e "${Error} 暂时不支持aarch64的系统 !" && exit 1
-      fi
+      ;;
+    12)
+      echo "deb http://deb.debian.org/debian bookworm-backports main" >/etc/apt/sources.list.d/bookworm-backports.list
+      ;;
+    *)
+      echo -e "[Error] 不支持当前系统 ${os_name} ${os_version} ${os_arch} !" && exit 1
+      ;;
+    esac
+
+    apt update
+    if [[ ${os_arch} == "x86_64" ]]; then
+      apt -t "$(lsb_release -cs)-backports" install \
+        linux-image-amd64 \
+        linux-headers-amd64 \
+        -y
+    elif [[ ${os_arch} =~ ^(arm|aarch64)$ ]]; then
+      apt -t "$(lsb_release -cs)-backports" install \
+        linux-image-arm64 \
+        linux-headers-arm64 \
+        -y
     else
-      echo -e "${Error} 不支持当前系统 ${release} ${version} ${bit} !" && exit 1
+      echo -e "[Error] 不支持当前系统架构 ${os_arch} !" && exit 1
     fi
   elif [[ "${release}" == "ubuntu" ]]; then
     echo -e "${Error} ubuntu不会写，你来吧" && exit 1
@@ -1877,17 +2021,32 @@ check_sys_official_bbr() {
   echo -e "${Tip} 内核安装完毕，请参考上面的信息检查是否安装成功,默认从排第一的高版本内核启动"
 }
 
-#检查官方xanmod内核并安装
-check_sys_official_xanmod() {
+#检查官方xanmod main内核并安装
+check_sys_official_xanmod_main() {
   check_version
+  wget -O check_x86-64_psabi.sh https://dl.xanmod.org/check_x86-64_psabi.sh
+  chmod +x check_x86-64_psabi.sh
+  cpu_level=$(./check_x86-64_psabi.sh | awk -F 'v' '{print $2}')
+  echo -e "CPU supports \033[32m${cpu_level}\033[0m"
+  # exit
   if [[ ${bit} != "x86_64" ]]; then
     echo -e "${Error} 不支持x86_64以外的系统 !" && exit 1
   fi
-  if [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
+
+  if [[ "${OS_type}" == "Debian" ]]; then
+    apt update
     apt-get install gnupg gnupg2 gnupg1 sudo -y
     echo 'deb http://deb.xanmod.org releases main' | sudo tee /etc/apt/sources.list.d/xanmod-kernel.list
     wget -qO - https://dl.xanmod.org/gpg.key | sudo apt-key --keyring /etc/apt/trusted.gpg.d/xanmod-kernel.gpg add -
-    apt update && apt install linux-xanmod -y
+    if [[ "${cpu_level}" == "4" ]]; then
+      apt update && apt install linux-xanmod-x64v4 -y
+    elif [[ "${cpu_level}" == "3" ]]; then
+      apt update && apt install linux-xanmod-x64v3 -y
+    elif [[ "${cpu_level}" == "2" ]]; then
+      apt update && apt install linux-xanmod-x64v2 -y
+    else
+      apt update && apt install linux-xanmod-x64v1 -y
+    fi
   else
     echo -e "${Error} 不支持当前系统 ${release} ${version} ${bit} !" && exit 1
   fi
@@ -1896,17 +2055,32 @@ check_sys_official_xanmod() {
   echo -e "${Tip} 内核安装完毕，请参考上面的信息检查是否安装成功,默认从排第一的高版本内核启动"
 }
 
-#检查官方xanmod高响应内核并安装
-check_sys_official_xanmod_cacule() {
+#检查官方xanmod lts内核并安装
+check_sys_official_xanmod_lts() {
   check_version
+  wget -O check_x86-64_psabi.sh https://dl.xanmod.org/check_x86-64_psabi.sh
+  chmod +x check_x86-64_psabi.sh
+  cpu_level=$(./check_x86-64_psabi.sh | awk -F 'v' '{print $2}')
+  echo -e "CPU supports \033[32m${cpu_level}\033[0m"
+  # exit
   if [[ ${bit} != "x86_64" ]]; then
     echo -e "${Error} 不支持x86_64以外的系统 !" && exit 1
   fi
-  if [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
+
+  if [[ "${OS_type}" == "Debian" ]]; then
+    apt update
     apt-get install gnupg gnupg2 gnupg1 sudo -y
     echo 'deb http://deb.xanmod.org releases main' | sudo tee /etc/apt/sources.list.d/xanmod-kernel.list
     wget -qO - https://dl.xanmod.org/gpg.key | sudo apt-key --keyring /etc/apt/trusted.gpg.d/xanmod-kernel.gpg add -
-    apt update && apt install linux-xanmod-cacule -y
+    if [[ "${cpu_level}" == "4" ]]; then
+      apt update && apt install linux-xanmod-lts-x64v4 -y
+    elif [[ "${cpu_level}" == "3" ]]; then
+      apt update && apt install linux-xanmod-lts-x64v3 -y
+    elif [[ "${cpu_level}" == "2" ]]; then
+      apt update && apt install linux-xanmod-lts-x64v2 -y
+    else
+      apt update && apt install linux-xanmod-lts-x64v1 -y
+    fi
   else
     echo -e "${Error} 不支持当前系统 ${release} ${version} ${bit} !" && exit 1
   fi
@@ -1915,43 +2089,39 @@ check_sys_official_xanmod_cacule() {
   echo -e "${Tip} 内核安装完毕，请参考上面的信息检查是否安装成功,默认从排第一的高版本内核启动"
 }
 
-#检查debian官方cloud内核并安装
-# check_sys_official_debian_cloud() {
-# check_version
-# if [[ "${release}" == "debian" ]]; then
-# if [[ ${version} == "9" ]]; then
-# echo "deb http://deb.debian.org/debian stretch-backports main" >/etc/apt/sources.list.d/stretch-backports.list
-# apt update
-# apt -t stretch-backports install linux-image-cloud-amd64 linux-headers-cloud-amd64 -y
-# elif [[ ${version} == "10" ]]; then
-# echo "deb http://deb.debian.org/debian buster-backports main" >/etc/apt/sources.list.d/buster-backports.list
-# apt update
-# apt -t buster-backports install linux-image-cloud-amd64 linux-headers-cloud-amd64 -y
-# else
-# echo -e "${Error} 不支持当前系统 ${release} ${version} ${bit} !" && exit 1
-# fi
-# else
-# echo -e "${Error} 不支持当前系统 ${release} ${version} ${bit} !" && exit 1
-# fi
+#检查官方xanmod lts内核并安装
+check_sys_official_xanmod_edge() {
+  check_version
+  wget -O check_x86-64_psabi.sh https://dl.xanmod.org/check_x86-64_psabi.sh
+  chmod +x check_x86-64_psabi.sh
+  cpu_level=$(./check_x86-64_psabi.sh | awk -F 'v' '{print $2}')
+  echo -e "CPU supports \033[32m${cpu_level}\033[0m"
+  # exit
+  if [[ ${bit} != "x86_64" ]]; then
+    echo -e "${Error} 不支持x86_64以外的系统 !" && exit 1
+  fi
 
-# BBR_grub
-# echo -e "${Tip} 内核安装完毕，请参考上面的信息检查是否安装成功,默认从排第一的高版本内核启动"
-# }
-#检查cloud内核并安装
-# check_sys_cloud(){
-# check_version
-# if [[ "${release}" == "centos" ]]; then
-# if [[ ${version} = "7" ]]; then
-# installcloud
-# else
-# echo -e "${Error} 不支持当前系统 ${release} ${version} ${bit} !" && exit 1
-# fi
-# elif [[ "${release}" == "debian" || "${release}" == "ubuntu" ]]; then
-# installcloud
-# else
-# echo -e "${Error} 不支持当前系统 ${release} ${version} ${bit} !" && exit 1
-# fi
-# }
+  if [[ "${OS_type}" == "Debian" ]]; then
+    apt update
+    apt-get install gnupg gnupg2 gnupg1 sudo -y
+    echo 'deb http://deb.xanmod.org releases main' | sudo tee /etc/apt/sources.list.d/xanmod-kernel.list
+    wget -qO - https://dl.xanmod.org/gpg.key | sudo apt-key --keyring /etc/apt/trusted.gpg.d/xanmod-kernel.gpg add -
+    if [[ "${cpu_level}" == "4" ]]; then
+      apt update && apt install linux-xanmod-edge-x64v4 -y
+    elif [[ "${cpu_level}" == "3" ]]; then
+      apt update && apt install linux-xanmod-edge-x64v3 -y
+    elif [[ "${cpu_level}" == "2" ]]; then
+      apt update && apt install linux-xanmod-edge-x64v2 -y
+    else
+      apt update && apt install linux-xanmod-edge-x64v1 -y
+    fi
+  else
+    echo -e "${Error} 不支持当前系统 ${release} ${version} ${bit} !" && exit 1
+  fi
+
+  BBR_grub
+  echo -e "${Tip} 内核安装完毕，请参考上面的信息检查是否安装成功,默认从排第一的高版本内核启动"
+}
 
 #检查Zen官方内核并安装
 check_sys_official_zen() {
@@ -1985,15 +2155,11 @@ check_status() {
   kernel_version_full=$(uname -r)
   net_congestion_control=$(cat /proc/sys/net/ipv4/tcp_congestion_control | awk '{print $1}')
   net_qdisc=$(cat /proc/sys/net/core/default_qdisc | awk '{print $1}')
-  #kernel_version_r=$(uname -r | awk '{print $1}')
-  # if [[ ${kernel_version_full} = "4.14.182-bbrplus" || ${kernel_version_full} = "4.14.168-bbrplus" || ${kernel_version_full} = "4.14.98-bbrplus" || ${kernel_version_full} = "4.14.129-bbrplus" || ${kernel_version_full} = "4.14.160-bbrplus" || ${kernel_version_full} = "4.14.166-bbrplus" || ${kernel_version_full} = "4.14.161-bbrplus" ]]; then
   if [[ ${kernel_version_full} == *bbrplus* ]]; then
     kernel_status="BBRplus"
-    # elif [[ ${kernel_version} = "3.10.0" || ${kernel_version} = "3.16.0" || ${kernel_version} = "3.2.0" || ${kernel_version} = "4.4.0" || ${kernel_version} = "3.13.0"  || ${kernel_version} = "2.6.32" || ${kernel_version} = "4.9.0" || ${kernel_version} = "4.11.2" || ${kernel_version} = "4.15.0" ]]; then
-    # kernel_status="Lotserver"
   elif [[ ${kernel_version_full} == *4.9.0-4* || ${kernel_version_full} == *4.15.0-30* || ${kernel_version_full} == *4.8.0-36* || ${kernel_version_full} == *3.16.0-77* || ${kernel_version_full} == *3.16.0-4* || ${kernel_version_full} == *3.2.0-4* || ${kernel_version_full} == *4.11.2-1* || ${kernel_version_full} == *2.6.32-504* || ${kernel_version_full} == *4.4.0-47* || ${kernel_version_full} == *3.13.0-29 || ${kernel_version_full} == *4.4.0-47* ]]; then
     kernel_status="Lotserver"
-  elif [[ $(echo ${kernel_version} | awk -F'.' '{print $1}') == "4" ]] && [[ $(echo ${kernel_version} | awk -F'.' '{print $2}') -ge 9 ]] || [[ $(echo ${kernel_version} | awk -F'.' '{print $1}') == "5" ]]; then
+  elif [[ $(echo ${kernel_version} | awk -F'.' '{print $1}') == "4" ]] && [[ $(echo ${kernel_version} | awk -F'.' '{print $2}') -ge 9 ]] || [[ $(echo ${kernel_version} | awk -F'.' '{print $1}') == "5" ]] || [[ $(echo ${kernel_version} | awk -F'.' '{print $1}') == "6" ]]; then
     kernel_status="BBR"
   else
     kernel_status="noinstall"
@@ -2064,5 +2230,6 @@ check_status() {
 #############系统检测组件#############
 check_sys
 check_version
-[[ ${release} != "debian" ]] && [[ ${release} != "ubuntu" ]] && [[ ${release} != "centos" ]] && echo -e "${Error} 本脚本不支持当前系统 ${release} !" && exit 1
+[[ "${OS_type}" == "Debian" ]] && [[ "${OS_type}" == "CentOS" ]] && echo -e "${Error} 本脚本不支持当前系统 ${release} !" && exit 1
+check_github
 start_menu
