@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set +H
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export PATH
 #=================================================
@@ -89,7 +90,7 @@ net.ipv4.tcp_max_orphans = 32768
   echo "ulimit -SHn 1000000" >>/etc/profile
   read -p "需要重启VPS后，才能生效系统优化配置，是否现在重启 ? [Y/n] :" yn
   [ -z "${yn}" ] && yn="y"
-  if [[ $yn == [Yy] ]]; then
+  if [[ "$yn" == [Yy] ]]; then
     echo -e "${Info} VPS 重启中..."
     reboot
   fi
@@ -801,7 +802,7 @@ installbbr() {
   check_kernel
   stty erase '^H' && read -p "需要重启VPS后，才能开启BBR，是否现在重启 ? [Y/n] :" yn
   [ -z "${yn}" ] && yn="y"
-  if [[ $yn == [Yy] ]]; then
+  if [[ "$yn" == [Yy] ]]; then
     echo -e "${Info} VPS 重启中..."
     reboot
   fi
@@ -2064,9 +2065,9 @@ check_sys() {
 
     # 检查并安装 curl、wget 和 dmidecode 包
     for pkg in curl wget dmidecode redhat-lsb-core; do
-      if ! type $pkg >/dev/null 2>&1; then
+      if ! type "$pkg" >/dev/null 2>&1; then
         echo "未安装 $pkg，正在安装..."
-        yum install $pkg -y
+        yum install "$pkg" -y
       else
         echo "$pkg 已安装。"
       fi
@@ -2093,7 +2094,7 @@ check_sys() {
     for pkg in curl wget dmidecode; do
       if ! type $pkg >/dev/null 2>&1; then
         echo "未安装 $pkg，正在安装..."
-        apt-get update || apt-get --allow-releaseinfo-change update && apt-get install $pkg -y
+        apt-get update || apt-get --allow-releaseinfo-change update && apt-get install "$pkg" -y
       else
         echo "$pkg 已安装。"
       fi
